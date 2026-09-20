@@ -1,0 +1,14 @@
+COMO USAR IMAGENS LOCAIS
+========================
+
+Esta pasta e para as fotos da academia (fotos reais, logo, etc.).
+
+Como fazer:
+1. Coloque suas fotos aqui (ex.: hero.jpg, musculacao.jpg, galeria-1.jpg)
+2. No arquivo index.html, troque o endereco https://images.unsplash.com/... pelo caminho local:
+   - Antes: src="https://images.unsplash.com/photo-xxx..."
+   - Depois: src="assets/images/hero.jpg"
+3. Salve, faca commit e push. O site passa a usar suas fotos.
+
+Dica: use imagens .jpg ou .webp com tamanho razoavel (max. ~300 KB cada)
+para o site carregar rapido.
