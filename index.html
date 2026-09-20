@@ -2,294 +2,99 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="itrainer - Treinos de musculação, spinning, jump e muay thai. Estrutura completa, professores qualificados e resultados de verdade.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="itrainer - App de treinos: planilhas, acompanhamento e progresso.">
   <meta name="theme-color" content="#121214">
-  <title>itrainer - Treine com Força</title>
-  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <title>itrainer - Seus treinos</title>
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-  <!-- ===== CABEÇALHO ===== -->
-  <header>
-    <div class="container nav">
-      <a href="#inicio" class="logo">i<span>trainer</span></a>
-      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">
-        <span></span><span></span><span></span>
-      </button>
-      <ul class="nav-links" id="navLinks">
-        <li><a href="#inicio">Início</a></li>
-        <li><a href="#sobre">Sobre</a></li>
-        <li><a href="#modalidades">Modalidades</a></li>
-        <li><a href="#beneficios">Benefícios</a></li>
-        <li><a href="#galeria">Galeria</a></li>
-        <li><a href="#depoimentos">Depoimentos</a></li>
-        <li><a href="#contato">Contato</a></li>
-      </ul>
-      <a href="#contato" class="nav-cta">Comece agora</a>
+  <!-- CABEÇALHO -->
+  <header class="app-header">
+    <div class="header-inner">
+      <button class="logo" data-view="inicio">i<span>trainer</span></button>
+      <span class="header-day" id="headerDay"></span>
     </div>
   </header>
 
-  <!-- ===== APRESENTAÇÃO / HERO ===== -->
-  <section class="hero" id="inicio">
-    <div class="container">
-      <div class="hero-content">
-        <span class="hero-tag">💪 Treine com propósito</span>
-        <h1>Força, <span>disciplina</span> e <span>resultados</span></h1>
-        <p>Estrutura completa, professores qualificados e um ambiente que motiva. Aqui você encontra musculação, spinning, jump e muay thai — do iniciante ao avançado.</p>
-        <div class="hero-buttons">
-          <a href="#contato" class="btn btn-primary">Matricule-se agora</a>
-          <a href="#modalidades" class="btn btn-outline">Conheça as modalidades</a>
+  <main class="app-main">
+
+    <!-- ===== TELA INÍCIO ===== -->
+    <section class="view active" id="view-inicio">
+      <div class="container">
+        <div class="welcome">
+          <h1>Bora treinar, <span id="saudacao"></span> 💪</h1>
+          <p id="fraseDia"></p>
         </div>
-        <div class="hero-stats">
-          <div class="stat"><h3>+500</h3><p>Alunos ativos</p></div>
-          <div class="stat"><h3>12</h3><p>Anos de experiência</p></div>
-          <div class="stat"><h3>4</h3><p>Modalidades</p></div>
+        <div id="cardHoje"></div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-valor" id="statSemana">0</span>
+            <span class="stat-rotulo">Treinos na semana</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-valor" id="statSequencia">0</span>
+            <span class="stat-rotulo">Dias seguidos</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-valor" id="statExercicios">0</span>
+            <span class="stat-rotulo">Exercícios feitos</span>
+          </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ===== TELA TREINOS ===== -->
+    <section class="view" id="view-treinos">
+      <div class="container">
+        <div class="dias-tabs" id="diasTabs"></div>
+        <div id="listaExercicios"></div>
+      </div>
+    </section>
+
+    <!-- ===== TELA PROGRESSO ===== -->
+    <section class="view" id="view-progresso">
+      <div class="container">
+        <div class="section-titulo">
+          <h2>Seu progresso</h2>
+          <p>Histórico dos últimos 7 dias</p>
+        </div>
+        <div class="barra-semana" id="barraSemana"></div>
+        <div class="resumo-progresso" id="resumoProgresso"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- NAVEGAÇÃO INFERIOR -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-view="inicio">
+      <span class="nav-icone">🏠</span><span>Início</span>
+    </button>
+    <button class="nav-item" data-view="treinos">
+      <span class="nav-icone">🏋️</span><span>Treinos</span>
+    </button>
+    <button class="nav-item" data-view="progresso">
+      <span class="nav-icone">📈</span><span>Progresso</span>
+    </button>
+  </nav>
+
+  <!-- MODAL TIMER -->
+  <div class="modal" id="modalTimer">
+    <div class="modal-conteudo">
+      <h3>Descanso</h3>
+      <div class="timer-numero" id="timerNumero">90</div>
+      <div class="timer-botoes">
+        <button class="btn btn-outline" id="timerPausar">Pausar</button>
+        <button class="btn btn-primary" id="timerFechar">Pular</button>
       </div>
     </div>
-  </section>
-
-  <!-- ===== SOBRE ===== -->
-  <section id="sobre">
-    <div class="container">
-      <div class="sobre-grid">
-        <img src="https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1200&auto=format&fit=crop" alt="Estrutura da academia">
-        <div class="sobre-text">
-          <span class="kicker">Quem somos</span>
-          <h3>Mais que uma academia, um estilo de vida</h3>
-          <p>A itrainer nasceu com um propósito: tornar o treino acessível, acolhedor e eficiente. Nossa estrutura foi pensada para quem busca saúde, estética ou performance — sempre com acompanhamento próximo e de qualidade.</p>
-          <p>Contamos com equipamentos modernos, aulas em grupo com energia e um time de professores que conhece cada aluno pelo nome.</p>
-          <ul>
-            <li>Equipamentos modernos e manutenção constante</li>
-            <li>Acompanhamento individualizado de professores</li>
-            <li>Ambiente limpo, seguro e climatizado</li>
-            <li>Horários flexíveis, inclusive aos sábados</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== MODALIDADES ===== -->
-  <section class="modalidades" id="modalidades">
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Nossas modalidades</span>
-        <h2>Escolha o seu treino</h2>
-        <p>Modalidades para todos os objetivos e níveis, com turmas em horários variados.</p>
-      </div>
-      <div class="cards">
-        <div class="card">
-          <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=800&auto=format&fit=crop" alt="Musculação">
-          <div class="card-body">
-            <h3>Musculação</h3>
-            <p>Treinos de força e hipertrofia com acompanhamento de professores e planos individualizados.</p>
-            <span class="tag">Força e hipertrofia</span>
-          </div>
-        </div>
-        <div class="card">
-          <img src="https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=800&auto=format&fit=crop" alt="Spinning">
-          <div class="card-body">
-            <h3>Spinning</h3>
-            <p>Aulas de bike com alta energia, música e treinos que queimam muitas calorias.</p>
-            <span class="tag">Cardio e resistência</span>
-          </div>
-        </div>
-        <div class="card">
-          <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=800&auto=format&fit=crop" alt="Jump">
-          <div class="card-body">
-            <h3>Jump</h3>
-            <p>Aula aeróbica sobre mini trampolins: diversão, coordenação e condicionamento.</p>
-            <span class="tag">Aeróbico</span>
-          </div>
-        </div>
-        <div class="card">
-          <img src="https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?q=80&w=800&auto=format&fit=crop" alt="Muay Thai">
-          <div class="card-body">
-            <h3>Muay Thai</h3>
-            <p>Arte marcial completa: defesa pessoal, condicionamento físico e disciplina.</p>
-            <span class="tag">Luta e defesa pessoal</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== BENEFÍCIOS ===== -->
-  <section id="beneficios">
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Por que treinar aqui</span>
-        <h2>Benefícios para você</h2>
-      </div>
-      <div class="beneficios-grid">
-        <div class="beneficio">
-          <div class="icon">🏋️</div>
-          <h3>Estrutura completa</h3>
-          <p>Área de musculação, estúdio de aulas e espaço para treinos funcionais.</p>
-        </div>
-        <div class="beneficio">
-          <div class="icon">👨‍🏫</div>
-          <h3>Professores qualificados</h3>
-          <p>Time formado e em constante atualização para orientar cada treino.</p>
-        </div>
-        <div class="beneficio">
-          <div class="icon">📅</div>
-          <h3>Horários flexíveis</h3>
-          <p>Funcionamento amplo, com turmas de manhã, tarde, noite e sábado.</p>
-        </div>
-        <div class="beneficio">
-          <div class="icon">❤️</div>
-          <h3>Saúde e bem-estar</h3>
-          <p>Treinos que melhoram condicionamento, postura, sono e disposição.</p>
-        </div>
-        <div class="beneficio">
-          <div class="icon">🤝</div>
-          <h3>Comunidade acolhedora</h3>
-          <p>Ambiente motivador, onde todos se conhecem e se apoiam.</p>
-        </div>
-        <div class="beneficio">
-          <div class="icon">📊</div>
-          <h3>Avaliação periódica</h3>
-          <p>Acompanhamento de evolução com avaliações físicas regulares.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== GALERIA ===== -->
-  <section class="galeria" id="galeria">
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Galeria</span>
-        <h2>Nosso ambiente</h2>
-        <p>Um pouco do dia a dia da nossa estrutura e das nossas turmas.</p>
-      </div>
-      <div class="galeria-grid">
-        <img src="https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop" alt="Treino funcional">
-        <img src="https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?q=80&w=800&auto=format&fit=crop" alt="Musculação">
-        <img src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop" alt="Treino de força">
-        <img src="https://images.unsplash.com/photo-1550345332-09e3ac987658?q=80&w=800&auto=format&fit=crop" alt="Treino com pesos">
-        <img src="https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=800&auto=format&fit=crop" alt="Personal trainer">
-        <img src="https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?q=80&w=800&auto=format&fit=crop" alt="Treino feminino">
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== DEPOIMENTOS ===== -->
-  <section id="depoimentos">
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Depoimentos</span>
-        <h2>Quem treina, recomenda</h2>
-      </div>
-      <div class="depoimentos-grid">
-        <div class="depoimento">
-          <div class="stars">★★★★★</div>
-          <p>"Comecei há 8 meses e já perdi 12kg. Os professores acompanham de perto e o ambiente me motiva todos os dias."</p>
-          <div class="autor">
-            <div class="avatar">MA</div>
-            <div><h4>Mariana Alves</h4><span>Aluna de musculação</span></div>
-          </div>
-        </div>
-        <div class="depoimento">
-          <div class="stars">★★★★★</div>
-          <p>"As aulas de spinning são incríveis! Energia do início ao fim. Melhor custo-benefício da região, sem dúvida."</p>
-          <div class="autor">
-            <div class="avatar">CP</div>
-            <div><h4>Carlos Pereira</h4><span>Aluno de spinning</span></div>
-          </div>
-        </div>
-        <div class="depoimento">
-          <div class="stars">★★★★★</div>
-          <p>"Treino muay thai há 2 anos. Evoluí na defesa pessoal e no condicionamento. A equipe é excepcional."</p>
-          <div class="autor">
-            <div class="avatar">JS</div>
-            <div><h4>Juliana Souza</h4><span>Aluna de muay thai</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== CONTATO ===== -->
-  <section class="modalidades" id="contato">
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Fale conosco</span>
-        <h2>Comece hoje mesmo</h2>
-        <p>Preencha o formulário ou visite a academia. Nossa equipe responde rápido.</p>
-      </div>
-      <div class="contato-grid">
-        <form class="contato-form" id="contactForm">
-          <label for="nome">Nome</label>
-          <input type="text" id="nome" name="nome" placeholder="Seu nome completo" required>
-
-          <label for="email">E-mail</label>
-          <input type="email" id="email" name="email" placeholder="seuemail@exemplo.com" required>
-
-          <label for="telefone">Telefone / WhatsApp</label>
-          <input type="tel" id="telefone" name="telefone" placeholder="(00) 00000-0000">
-
-          <label for="mensagem">Mensagem</label>
-          <textarea id="mensagem" name="mensagem" placeholder="Conte o que você procura: modalidade, horários, planos..."></textarea>
-
-          <button type="submit" class="btn btn-primary btn-submit">Enviar mensagem</button>
-        </form>
-        <div class="contato-info">
-          <div class="info-item">
-            <div class="icon">📍</div>
-            <div>
-              <h4>Endereço</h4>
-              <p id="infoEndereco"></p>
-              <p id="infoCidade"></p>
-            </div>
-          </div>
-          <div class="info-item">
-            <div class="icon">📞</div>
-            <div>
-              <h4>Telefone / WhatsApp</h4>
-              <p id="infoTelefone"></p>
-            </div>
-          </div>
-          <div class="info-item">
-            <div class="icon">🕐</div>
-            <div>
-              <h4>Horários</h4>
-              <p id="infoHorarioSemana"></p>
-              <p id="infoHorarioSabado"></p>
-            </div>
-          </div>
-          <div class="info-item">
-            <div class="icon">✉️</div>
-            <div>
-              <h4>E-mail</h4>
-              <p id="infoEmail"></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== RODAPÉ ===== -->
-  <footer>
-    <div class="container">
-      <div class="logo">i<span>trainer</span></div>
-      <div class="social" id="socialLinks">
-        <a href="#" data-rede="instagram" aria-label="Instagram">📷</a>
-        <a href="#" data-rede="facebook" aria-label="Facebook">👍</a>
-        <a href="#" data-rede="whatsapp" aria-label="WhatsApp">💬</a>
-      </div>
-      <p>© <span id="ano"></span> itrainer — Todos os direitos reservados.</p>
-    </div>
-  </footer>
+  </div>
 
   <script src="js/config.js" defer></script>
   <script src="js/main.js" defer></script>
