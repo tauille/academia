@@ -1,439 +1,100 @@
-/* ==========================================================================
-   itrainer — App de treinos
-   Índice:
-   1. Variáveis e reset
-   2. Base e layout
-   3. Cabeçalho
-   4. Navegação inferior
-   5. Tela Início
-   6. Tela Treinos
-   7. Tela Progresso
-   8. Modal do timer
-   9. Responsivo
-   ========================================================================== */
-
-/* ---------- 1. VARIÁVEIS E RESET ---------- */
-:root {
-  --bg: #121214;
-  --surface: #1a1a1e;
-  --surface-2: #222226;
-  --accent: #c8f31d;
-  --accent-dark: #a8d112;
-  --text: #f5f5f5;
-  --muted: #a1a1a6;
-  --border: #2a2a30;
-  --radius: 14px;
-  --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-html { scroll-behavior: smooth; }
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  line-height: 1.6;
-  overflow-x: hidden;
-  padding-bottom: 80px; /* espaço para a nav inferior */
-}
-
-button { font-family: var(--font-body); cursor: pointer; }
-
-.container { width: min(720px, 92%); margin: 0 auto; }
-
-/* ---------- 2. BASE ---------- */
-.app-main { padding-top: 72px; }
-
-.view { display: none; }
-.view.active { display: block; animation: fadeIn 0.3s ease; }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ---------- 3. CABEÇALHO ---------- */
-.app-header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 100;
-  background: rgba(18, 18, 20, 0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-}
-
-.header-inner {
-  width: min(720px, 92%);
-  margin: 0 auto;
-  height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  background: none;
-  border: none;
-  font-family: var(--font-display);
-  font-size: 1.9rem;
-  letter-spacing: 2px;
-  color: var(--text);
-  text-transform: uppercase;
-}
-
-.logo span { color: var(--accent); }
-
-.header-day {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-/* ---------- 4. NAVEGAÇÃO INFERIOR ---------- */
-.bottom-nav {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 100;
-  background: rgba(18, 18, 20, 0.95);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-around;
-  padding: 0.6rem 0 calc(0.6rem + env(safe-area-inset-bottom));
-}
-
-.nav-item {
-  background: none;
-  border: none;
-  color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.3rem 1.2rem;
-  border-radius: 10px;
-  transition: color 0.2s;
-}
-
-.nav-item .nav-icone { font-size: 1.3rem; }
-
-.nav-item.active { color: var(--accent); }
-
-/* ---------- 5. TELA INÍCIO ---------- */
-.welcome { margin: 1.5rem 0 1.8rem; }
-
-.welcome h1 {
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 6vw, 2.6rem);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 0.4rem;
-}
-
-.welcome h1 span { color: var(--accent); }
-
-.welcome p { color: var(--muted); }
-
-.card-treino-hoje {
+/* ---------- 11. GERENCIAR (CADASTRAR/ALTERAR TREINOS) ---------- */
+.dia-gerenciar {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.6rem;
-  margin-bottom: 1.5rem;
-}
-
-.card-treino-hoje .card-topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.card-treino-hoje h3 {
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  letter-spacing: 1px;
-}
-
-.card-treino-hoje .dia-tag {
-  background: rgba(200, 243, 29, 0.12);
-  color: var(--accent);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.3rem 0.8rem;
-  border-radius: 100px;
-}
-
-.progresso-barra {
-  height: 10px;
-  background: var(--surface-2);
-  border-radius: 100px;
-  overflow: hidden;
-  margin: 1rem 0 0.6rem;
-}
-
-.progresso-barra .preenchimento {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 100px;
-  transition: width 0.4s ease;
-}
-
-.progresso-texto { font-size: 0.85rem; color: var(--muted); }
-
-.card-treino-hoje .btn {
-  margin-top: 1.2rem;
-  width: 100%;
-  text-align: center;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.8rem;
-}
-
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.2rem 0.8rem;
-  text-align: center;
-}
-
-.stat-valor {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 2rem;
-  color: var(--accent);
-  letter-spacing: 1px;
-}
-
-.stat-rotulo {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-/* ---------- 6. TELA TREINOS ---------- */
-.dias-tabs {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding: 1rem 0;
-  margin-bottom: 1rem;
-  scrollbar-width: none;
-}
-
-.dias-tabs::-webkit-scrollbar { display: none; }
-
-.dia-tab {
-  flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 0.6rem 1.1rem;
-  border-radius: 100px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  transition: 0.2s;
-}
-
-.dia-tab.active {
-  background: var(--accent);
-  color: #121214;
-  border-color: var(--accent);
-}
-
-.exercicio {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.2rem 1.4rem;
-  margin-bottom: 1rem;
-}
-
-.exercicio-topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  padding: 1rem 1.2rem;
   margin-bottom: 0.8rem;
-}
-
-.exercicio-topo h3 { font-size: 1.05rem; }
-
-.exercicio-meta {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 0.2rem;
-}
-
-.exercicio-meta strong { color: var(--accent); }
-
-.series {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
-}
-
-.serie {
-  flex: 1;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.6rem 0.4rem;
-  text-align: center;
-  font-size: 0.78rem;
-  color: var(--muted);
-  transition: 0.2s;
-}
-
-.serie.concluida {
-  background: rgba(200, 243, 29, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.serie .serie-num { display: block; font-weight: 700; font-size: 0.9rem; }
-
-.exercicio.concluido { border-color: var(--accent); }
-
-.exercicio.concluido .exercicio-topo h3 {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-
-/* ---------- 7. TELA PROGRESSO ---------- */
-.section-titulo { margin: 1.5rem 0 1.5rem; }
-
-.section-titulo h2 {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.section-titulo p { color: var(--muted); font-size: 0.9rem; }
-
-.barra-semana {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.6rem;
-  height: 160px;
-  margin-bottom: 1.5rem;
-}
-
-.barra-dia {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  height: 100%;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.barra-dia .barra {
-  width: 100%;
-  max-width: 40px;
-  background: var(--surface-2);
-  border-radius: 8px 8px 0 0;
-  min-height: 6px;
-  transition: height 0.4s ease;
+.dia-gerenciar-info { display: flex; flex-direction: column; gap: 0.15rem; }
+.dia-gerenciar-info strong { font-size: 1rem; }
+.dia-gerenciar-info span { font-size: 0.82rem; color: var(--muted); }
+
+.btn-pequeno { padding: 0.5rem 1rem; font-size: 0.8rem; }
+
+.modal-editor {
+  width: min(480px, 94%);
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: left;
 }
 
-.barra-dia .barra.preenchida { background: var(--accent); }
-
-.barra-dia span { font-size: 0.7rem; color: var(--muted); }
-
-.resumo-progresso {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.4rem;
-}
-
-.resumo-progresso h4 { margin-bottom: 0.8rem; font-size: 1rem; }
-
-.resumo-lista { list-style: none; }
-
-.resumo-lista li {
+.editor-cabecalho {
   display: flex;
   justify-content: space-between;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-
-.resumo-lista li:last-child { border-bottom: none; }
-
-.resumo-lista .ok { color: var(--accent); font-weight: 700; }
-.resumo-lista .pendente { color: var(--muted); }
-
-/* ---------- 8. MODAL DO TIMER ---------- */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: none;
   align-items: center;
-  justify-content: center;
-  z-index: 200;
+  margin-bottom: 1rem;
 }
 
-.modal.aberto { display: flex; }
-
-.modal-conteudo {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2rem;
-  width: min(320px, 90%);
-  text-align: center;
-}
-
-.modal-conteudo h3 {
+.editor-cabecalho h3 {
   font-family: var(--font-display);
   font-size: 1.5rem;
   letter-spacing: 1px;
-  margin-bottom: 1rem;
 }
 
-.timer-numero {
-  font-family: var(--font-display);
-  font-size: 4.5rem;
-  color: var(--accent);
-  line-height: 1;
-  margin-bottom: 1.5rem;
+.campo { display: block; margin-bottom: 0.9rem; }
+
+.campo span {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--muted);
 }
 
-.timer-botoes { display: flex; gap: 0.8rem; }
-
-.timer-botoes .btn { flex: 1; }
-
-/* ---------- 9. BOTÕES ---------- */
-.btn {
-  display: inline-block;
-  padding: 0.85rem 1.6rem;
-  border-radius: 10px;
-  font-weight: 700;
+.campo input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.7rem 0.9rem;
+  font-family: var(--font-body);
   font-size: 0.9rem;
-  border: none;
-  transition: 0.2s;
 }
 
-.btn-primary { background: var(--accent); color: #121214; }
-.btn-primary:hover { background: var(--accent-dark); }
+.campo input:focus { outline: none; border-color: var(--accent); }
 
-.btn-outline { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
-.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-
-/* ---------- 10. RESPONSIVO ---------- */
-@media (min-width: 720px) {
-  .app-main { padding-top: 80px; }
-  .header-inner, .container { width: min(720px, 92%); }
+.ed-exercicio {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem;
+  margin-bottom: 0.7rem;
 }
+
+.ed-exercicio .ed-nome {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.6rem 0.8rem;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  margin-bottom: 0.5rem;
+}
+
+.ed-linha { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+
+.ed-linha input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.5rem 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+}
+
+.ed-exercicio .ed-remover { width: 100%; }
+
+.editor-acoes { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+.editor-acoes .btn { width: 100%; }

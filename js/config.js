@@ -1,84 +1,59 @@
 /* ==========================================================================
-   itrainer — Dados dos treinos
-   Edite aqui seus treinos: exercícios, séries, repetições e descanso.
+   itrainer — Treinos padrão (Treino Halteres)
+   Os treinos ficam salvos no navegador quando você edita pela tela Gerenciar.
+   Para restaurar o padrão, limpe os dados do site no navegador.
    ========================================================================== */
 
 const CONFIG = {
   nome: 'itrainer',
 
-  // Dias da semana (ordem do JS: 0=domingo ... 6=sábado)
   treinos: {
     seg: {
       titulo: 'Peito e Tríceps',
       emoji: '🏋️',
       exercicios: [
-        { nome: 'Supino reto com barra', series: 4, repeticoes: '10-12', descanso: 90 },
-        { nome: 'Supino inclinado com halteres', series: 3, repeticoes: '10-12', descanso: 90 },
-        { nome: 'Crucifixo', series: 3, repeticoes: '12-15', descanso: 60 },
-        { nome: 'Tríceps corda', series: 3, repeticoes: '12-15', descanso: 60 },
-        { nome: 'Tríceps testa', series: 3, repeticoes: '12', descanso: 60 }
+        { nome: 'Supino no chão com halteres (Floor Press)', series: 4, repeticoes: '10-12', descanso: 90 },
+        { nome: 'Flexão de solo (pode usar as pegadas como apoio)', series: 3, repeticoes: 'até o limite técnico', descanso: 60 },
+        { nome: 'Crucifixo no chão com halteres', series: 3, repeticoes: '12', descanso: 60 },
+        { nome: 'Tríceps francês unilateral ou bilateral com halter', series: 3, repeticoes: '12', descanso: 60 },
+        { nome: 'Tríceps testa no chão com a barra montada', series: 3, repeticoes: '10-12', descanso: 60 }
       ]
     },
     ter: {
       titulo: 'Costas e Bíceps',
       emoji: '🔥',
       exercicios: [
-        { nome: 'Puxada frontal', series: 4, repeticoes: '10-12', descanso: 90 },
-        { nome: 'Remada curvada', series: 4, repeticoes: '10-12', descanso: 90 },
-        { nome: 'Remada baixa', series: 3, repeticoes: '12', descanso: 60 },
-        { nome: 'Rosca direta', series: 3, repeticoes: '12', descanso: 60 },
-        { nome: 'Rosca martelo', series: 3, repeticoes: '12', descanso: 60 }
+        { nome: 'Remada curvada com pegada pronada na barra', series: 4, repeticoes: '10-12', descanso: 90 },
+        { nome: 'Remada unilateral (serrote) com halter ou kettlebell', series: 3, repeticoes: '12 cada lado', descanso: 60 },
+        { nome: 'Levantamento terra com a barra', series: 3, repeticoes: '10', descanso: 120 },
+        { nome: 'Rosca direta com a barra', series: 3, repeticoes: '10-12', descanso: 60 },
+        { nome: 'Rosca martelo com halteres', series: 3, repeticoes: '12', descanso: 60 }
       ]
     },
     qua: {
-      titulo: 'Pernas',
+      titulo: 'Pernas completas',
       emoji: '🦵',
       exercicios: [
-        { nome: 'Agachamento livre', series: 4, repeticoes: '10-12', descanso: 120 },
-        { nome: 'Leg press 45°', series: 4, repeticoes: '12', descanso: 90 },
-        { nome: 'Cadeira extensora', series: 3, repeticoes: '12-15', descanso: 60 },
-        { nome: 'Mesa flexora', series: 3, repeticoes: '12-15', descanso: 60 },
-        { nome: 'Panturrilha em pé', series: 4, repeticoes: '15-20', descanso: 45 }
+        { nome: 'Agachamento Goblet segurando o kettlebell junto ao peito', series: 4, repeticoes: '12', descanso: 120 },
+        { nome: 'Passada estática (afundo) com halteres nas mãos', series: 3, repeticoes: '10-12 por perna', descanso: 90 },
+        { nome: 'Stiff com halteres ou com a barra', series: 4, repeticoes: '10-12', descanso: 90 },
+        { nome: 'Elevação pélvica no chão com peso sobre o quadril', series: 3, repeticoes: '15', descanso: 60 },
+        { nome: 'Elevação de panturrilha em pé (unilateral segurando halter)', series: 4, repeticoes: '15-20', descanso: 45 }
       ]
     },
     qui: {
-      titulo: 'Ombros e Abdômen',
+      titulo: 'Ombros e Trapézio (com finalização de braços)',
       emoji: '💪',
       exercicios: [
-        { nome: 'Desenvolvimento militar', series: 4, repeticoes: '10-12', descanso: 90 },
-        { nome: 'Elevação lateral', series: 3, repeticoes: '12-15', descanso: 60 },
-        { nome: 'Elevação frontal', series: 3, repeticoes: '12', descanso: 60 },
-        { nome: 'Prancha', series: 3, repeticoes: '45s', descanso: 45 },
-        { nome: 'Abdominal infra', series: 3, repeticoes: '15-20', descanso: 45 }
+        { nome: 'Desenvolvimento de ombros com halteres', series: 4, repeticoes: '10-12', descanso: 90 },
+        { nome: 'Elevação lateral com halteres', series: 4, repeticoes: '12-15', descanso: 60 },
+        { nome: 'Crucifixo inverso curvado para posterior de ombro', series: 3, repeticoes: '12-15', descanso: 60 },
+        { nome: 'Encolhimento de ombros com a barra ou kettlebell', series: 3, repeticoes: '15', descanso: 60 },
+        { nome: 'Rosca concentrada ou rosca inversa', series: 3, repeticoes: '12', descanso: 60 }
       ]
     },
-    sex: {
-      titulo: 'Spinning / Cardio',
-      emoji: '🚴',
-      exercicios: [
-        { nome: 'Aquecimento leve', series: 1, repeticoes: '10 min', descanso: 0 },
-        { nome: 'Sprints intervalados', series: 8, repeticoes: '30s', descanso: 60 },
-        { nome: 'Subida sentado', series: 4, repeticoes: '2 min', descanso: 90 },
-        { nome: 'Desaceleração', series: 1, repeticoes: '5 min', descanso: 0 }
-      ]
-    },
-    sab: {
-      titulo: 'Jump / Muay Thai',
-      emoji: '🥊',
-      exercicios: [
-        { nome: 'Jump - sequência 1', series: 3, repeticoes: '3 min', descanso: 60 },
-        { nome: 'Jump - sequência 2', series: 3, repeticoes: '3 min', descanso: 60 },
-        { nome: 'Muay Thai - sombra', series: 3, repeticoes: '3 min', descanso: 60 },
-        { nome: 'Muay Thai - clinch e joelhadas', series: 3, repeticoes: '3 min', descanso: 60 }
-      ]
-    },
-    dom: {
-      titulo: 'Descanso ativo',
-      emoji: '🧘',
-      exercicios: [
-        { nome: 'Alongamento geral', series: 1, repeticoes: '15 min', descanso: 0 },
-        { nome: 'Caminhada leve', series: 1, repeticoes: '30 min', descanso: 0 }
-      ]
-    }
+    sex: { titulo: 'Descanso', emoji: '😴', exercicios: [] },
+    sab: { titulo: 'Descanso', emoji: '😴', exercicios: [] },
+    dom: { titulo: 'Descanso', emoji: '😴', exercicios: [] }
   }
 };
