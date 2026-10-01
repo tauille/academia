@@ -1,24 +1,27 @@
 /* ==========================================================================
-   itrainer — Lógica do app (CRUD + execução + timer com som)
+   itrainer — Lógica do app (CRUD + execução + timer com som + histórico)
    1. Armazenamento
    2. Navegação
    3. Listar treinos
    4. Executar treino (séries + timer)
    5. Gerenciar (CRUD)
-   6. Som
-   7. Timer (execução + descanso em sequência)
-   8. Toast
+   6. Histórico
+   7. Som
+   8. Timer (bip nos 10s finais + execução/descanso em sequência)
    9. Inicialização
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
+const STORAGE_HISTORICO = 'itrainer-historico-v3';
 
 let treinos = null;
 let estado = {};
 let treinoAtivo = null;
+let historico = [];
 
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
+function hoje() { return new Date().toISOString().split('T')[0]; }
 
 function carregarTreinos() {
   try {
@@ -48,6 +51,18 @@ function carregarEstado() {
 }
 function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); }
 
+function carregarHistorico() {
+  try {
+    const raw = localStorage.getItem(STORAGE_HISTORICO);
+    if (raw) {
+      const dados = JSON.parse(raw);
+      if (Array.isArray(dados)) { historico = dados; return; }
+    }
+  } catch (e) {}
+  historico = [];
+}
+function salvarHistorico() { localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico)); }
+
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -63,6 +78,7 @@ function navegar(viewId) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
   document.getElementById('appMain').scrollTop = 0;
   if (viewId === 'treinos') renderTreinos();
+  if (viewId === 'historico') renderHistorico();
   if (viewId === 'gerenciar') renderGerenciar();
 }
 
@@ -183,7 +199,6 @@ function marcarSerie(exIndex, serieIndex) {
   if (marcou) {
     const tempo = tempoEmSegundos(exer.repeticoes);
     if (tempo > 0) {
-      // Exercício por tempo: cronômetro de EXECUÇÃO e, ao zerar, DESCANS0 em sequência
       abrirTimer(tempo, 'Tempo de execução', exer.nome, () => {
         if (exer.descanso > 0) abrirTimer(exer.descanso, 'Descanso', exer.nome);
       });
@@ -191,7 +206,13 @@ function marcarSerie(exIndex, serieIndex) {
       abrirTimer(exer.descanso, 'Descanso', exer.nome);
     }
     if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
+
+    // Histórico: registra quando TODOS os exercícios do treino terminam
+    const completo = t.exercicios.every((e, i) =>
+      (estado[t.id][i] || []).filter(Boolean).length >= e.series);
+    if (completo) registrarHistorico(t);
   }
+
   renderExecucao();
 }
 
@@ -204,6 +225,7 @@ function concluirTreino() {
   t.exercicios.forEach((e, i) => { ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true); });
   estado[t.id] = ex;
   salvarEstado();
+  if (!tudoFeito) registrarHistorico(t);
   mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
   renderExecucao();
 }
@@ -347,7 +369,69 @@ function abrirEditor(treinoId) {
   modal.classList.add('aberto');
 }
 
-// ---------- 6. SOM (Web Audio API — sem arquivo de áudio) ----------
+// ---------- 6. HISTÓRICO ----------
+function registrarHistorico(t) {
+  if (!t || !t.exercicios.length) return;
+  const data = hoje();
+  if (historico.some(h => h.treinoId === t.id && h.data === data)) return;
+
+  const ex = estado[t.id] || {};
+  const exercicios = t.exercicios.map((e, i) => ({
+    nome: e.nome,
+    series: (ex[i] || []).filter(Boolean).length,
+    carga: e.carga || ''
+  }));
+
+  historico.unshift({
+    data: data,
+    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    treinoId: t.id,
+    treinoNome: t.nome,
+    exercicios: exercicios
+  });
+  salvarHistorico();
+}
+
+function capitalizar(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function renderHistorico() {
+  const lista = document.getElementById('listaHistorico');
+  if (!historico.length) {
+    lista.innerHTML = '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
+    return;
+  }
+
+  const grupos = {};
+  historico.forEach(h => {
+    if (!grupos[h.data]) grupos[h.data] = [];
+    grupos[h.data].push(h);
+  });
+
+  const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+
+  lista.innerHTML = datas.map(data => {
+    const titulo = capitalizar(
+      new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+    );
+    return `
+      <div class="hist-dia">
+        <div class="hist-dia-cabecalho">
+          <strong>${titulo}</strong>
+          <span>${grupos[data].length} treino(s)</span>
+        </div>
+        ${grupos[data].map(h => `
+          <div class="hist-item">
+            <div class="hist-item-topo">
+              <strong>${h.treinoNome}</strong>
+              <span>🕐 ${h.hora}</span>
+            </div>
+            <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+}
+
+// ---------- 7. SOM (Web Audio API — sem arquivo de áudio) ----------
 let audioCtx = null;
 function tocarSom(tipo) {
   try {
@@ -358,17 +442,23 @@ function tocarSom(tipo) {
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.type = 'sine';
-    osc.frequency.value = tipo === 'exec' ? 880 : 660;
+
+    let freq = 660, dur = 0.5, vol = 0.4;
+    if (tipo === 'exec') { freq = 880; }
+    else if (tipo === 'descanso') { freq = 660; }
+    else if (tipo === 'tick') { freq = 1100; dur = 0.09; vol = 0.22; }
+
+    osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+    gain.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
     osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.5);
+    osc.stop(audioCtx.currentTime + dur);
     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   } catch (e) { /* áudio indisponível */ }
 }
 
-// ---------- 7. TIMER ----------
+// ---------- 8. TIMER ----------
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -389,7 +479,6 @@ function tempoEmSegundos(texto) {
   return 0;
 }
 
-// abrirTimer(segundos, título, nome, aoTerminar)
 function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   const modal = document.getElementById('modalTimer');
   const numero = document.getElementById('timerNumero');
@@ -415,6 +504,10 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
     timerRestante--;
     numero.textContent = timerRestante;
     ring.style.strokeDashoffset = C * (1 - timerRestante / timerTotal);
+
+    // Bip a cada segundo nos 10s finais
+    if (timerRestante <= 10 && timerRestante > 0) tocarSom('tick');
+
     if (timerRestante <= 0) {
       clearInterval(timerInterval);
       modal.classList.remove('aberto');
@@ -434,7 +527,7 @@ document.getElementById('timerPausar').addEventListener('click', () => {
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
-// ---------- 8. INICIALIZAÇÃO ----------
+// ---------- 9. INICIALIZAÇÃO ----------
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
@@ -442,4 +535,5 @@ document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEd
 
 carregarTreinos();
 carregarEstado();
+carregarHistorico();
 navegar('treinos');

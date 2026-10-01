@@ -1,5 +1,5 @@
 /* ==========================================================================
-   itrainer — App de treino · versão corrigida
+   itrainer — App de treino · versão com histórico
    ========================================================================== */
 
 :root {
@@ -87,7 +87,7 @@ input, select { font-family: var(--font-body); }
   display: flex; justify-content: space-around;
 }
 .nav-item {
-  flex: 1; max-width: 120px;
+  flex: 1; max-width: 110px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 0.15rem; font-size: 0.65rem; font-weight: 600; color: var(--muted);
   position: relative; min-height: 52px;
@@ -190,6 +190,20 @@ input, select { font-family: var(--font-body); }
 .dia-gerenciar-info strong { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dia-gerenciar-info span { font-size: 0.8rem; color: var(--muted); }
 .dia-gerenciar-acoes { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* ---------- HISTÓRICO ---------- */
+.hist-dia { margin-bottom: 1.4rem; }
+.hist-dia-cabecalho { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.6rem; }
+.hist-dia-cabecalho strong { font-size: 0.95rem; }
+.hist-dia-cabecalho span { font-size: 0.75rem; color: var(--muted); }
+.hist-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.9rem 1.1rem; margin-bottom: 0.55rem;
+}
+.hist-item-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+.hist-item-topo strong { font-size: 0.95rem; color: var(--accent); }
+.hist-item-topo span { font-size: 0.78rem; color: var(--muted); }
+.hist-exercicios { font-size: 0.8rem; color: var(--muted); line-height: 1.55; }
 
 /* ---------- BOTÕES ---------- */
 .btn {
