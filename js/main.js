@@ -6,7 +6,7 @@
    4. Executar treino (séries + timer)
    5. Gerenciar (CRUD)
    6. Histórico
-   7. Som
+   7. Som (desbloqueio no toque + bipes)
    8. Timer (bip nos 10s finais + execução/descanso em sequência)
    9. Inicialização
    ========================================================================== */
@@ -23,6 +23,7 @@ let historico = [];
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 function hoje() { return new Date().toISOString().split('T')[0]; }
 
+// ---------- 1. ARMAZENAMENTO ----------
 function carregarTreinos() {
   try {
     const raw = localStorage.getItem(STORAGE_TREINOS);
@@ -115,6 +116,16 @@ function renderTreinos() {
 }
 
 // ---------- 4. EXECUTAR TREINO ----------
+// Retorna o tempo de execução em segundos (0 = exercício por repetição)
+function tempoDoExercicio(ex) {
+  if (!ex) return 0;
+  if (ex.tipo === 'tempo') {
+    const n = parseFloat(String(ex.repeticoes).replace(',', '.'));
+    return isNaN(n) || n <= 0 ? 0 : Math.round(n);
+  }
+  return tempoEmSegundos(ex.repeticoes); // compatível com dados antigos ("45s", "3 min")
+}
+
 function renderExecucao() {
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
@@ -139,9 +150,9 @@ function renderExecucao() {
   t.exercicios.forEach((exer, i) => {
     const feitas = (ex[i] || []).filter(Boolean).length;
     const exConcluido = feitas >= exer.series;
-    const tempo = tempoEmSegundos(exer.repeticoes);
+    const tempo = tempoDoExercicio(exer);
     const metaTempo = tempo > 0
-      ? `<span class="chip">⏱️ <strong>${exer.repeticoes}</strong> execução</span>`
+      ? `<span class="chip">⏱️ <strong>${tempo}s</strong> execução</span>`
       : `<span class="chip">🔁 <strong>${exer.repeticoes}</strong> reps</span>`;
 
     html += `
@@ -197,7 +208,8 @@ function marcarSerie(exIndex, serieIndex) {
   salvarEstado();
 
   if (marcou) {
-    const tempo = tempoEmSegundos(exer.repeticoes);
+    desbloquearAudio(); // áudio criado/retomado DENTRO do gesto do toque
+    const tempo = tempoDoExercicio(exer);
     if (tempo > 0) {
       abrirTimer(tempo, 'Tempo de execução', exer.nome, () => {
         if (exer.descanso > 0) abrirTimer(exer.descanso, 'Descanso', exer.nome);
@@ -207,7 +219,6 @@ function marcarSerie(exIndex, serieIndex) {
     }
     if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
 
-    // Histórico: registra quando TODOS os exercícios do treino terminam
     const completo = t.exercicios.every((e, i) =>
       (estado[t.id][i] || []).filter(Boolean).length >= e.series);
     if (completo) registrarHistorico(t);
@@ -265,7 +276,7 @@ function excluirTreino(id) {
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
 
-// ---------- EDITOR ----------
+// ---------- EDITOR (com seletor Repetições / Tempo) ----------
 function abrirEditor(treinoId) {
   const modal = document.getElementById('modalEditor');
   const corpo = document.getElementById('editorCorpo');
@@ -276,7 +287,7 @@ function abrirEditor(treinoId) {
     treino = treinos.find(t => t.id === treinoId);
     if (!treino) return;
   } else {
-    treino = { id: 't' + Date.now(), nome: '', exercicios: [{ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' }] };
+    treino = { id: 't' + Date.now(), nome: '', exercicios: [{ nome: '', icone: 'halteres', equipamento: '', tipo: 'reps', series: 3, repeticoes: '12', descanso: 60, carga: '' }] };
     novo = true;
   }
 
@@ -303,6 +314,7 @@ function abrirEditor(treinoId) {
       nome: row.querySelector('.ed-nome').value.trim(),
       icone: row.querySelector('.ed-icone').value || 'halteres',
       equipamento: row.querySelector('.ed-equipamento').value.trim(),
+      tipo: row.querySelector('.ed-tipo-select').value || 'reps',
       series: Number(row.querySelector('.ed-series').value) || 3,
       repeticoes: row.querySelector('.ed-reps').value.trim() || '12',
       descanso: Number(row.querySelector('.ed-descanso').value) || 60,
@@ -313,6 +325,7 @@ function abrirEditor(treinoId) {
   const renderRows = () => {
     cont.innerHTML = '';
     treino.exercicios.forEach((ex, i) => {
+      const tipo = ex.tipo === 'tempo' ? 'tempo' : 'reps';
       const sel = Object.keys(ICONES)
         .map(k => `<option value="${k}" ${ex.icone === k ? 'selected' : ''}>${k}</option>`).join('');
       const row = document.createElement('div');
@@ -323,13 +336,30 @@ function abrirEditor(treinoId) {
           <select class="ed-icone">${sel}</select>
           <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equipamento">
         </div>
+        <div class="ed-tipo">
+          <select class="ed-tipo-select">
+            <option value="reps" ${tipo === 'reps' ? 'selected' : ''}>Repetições</option>
+            <option value="tempo" ${tipo === 'tempo' ? 'selected' : ''}>Tempo (segundos)</option>
+          </select>
+          <span class="ed-tipo-rotulo">${tipo === 'tempo' ? 'Tempo (s)' : 'Reps'}</span>
+        </div>
         <div class="ed-linha">
           <input type="number" class="ed-series" value="${ex.series}" min="1" placeholder="Séries">
-          <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="Reps ou 45s">
+          <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="${tipo === 'tempo' ? 'Ex.: 45' : 'Ex.: 12'}">
           <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="Desc(s)">
           <input type="text" class="ed-carga" value="${ex.carga}" placeholder="Carga">
         </div>
         <button class="btn btn-outline btn-pequeno ed-remover">Remover exercício</button>`;
+
+      const selTipo = row.querySelector('.ed-tipo-select');
+      const reps = row.querySelector('.ed-reps');
+      const rotulo = row.querySelector('.ed-tipo-rotulo');
+      selTipo.addEventListener('change', () => {
+        const tempo = selTipo.value === 'tempo';
+        rotulo.textContent = tempo ? 'Tempo (s)' : 'Reps';
+        reps.placeholder = tempo ? 'Ex.: 45' : 'Ex.: 12';
+      });
+
       row.querySelector('.ed-remover').addEventListener('click', () => {
         coletar();
         treino.exercicios.splice(i, 1);
@@ -342,7 +372,7 @@ function abrirEditor(treinoId) {
 
   corpo.querySelector('#edAdicionar').addEventListener('click', () => {
     coletar();
-    treino.exercicios.push({ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' });
+    treino.exercicios.push({ nome: '', icone: 'halteres', equipamento: '', tipo: 'reps', series: 3, repeticoes: '12', descanso: 60, carga: '' });
     renderRows();
   });
 
@@ -374,14 +404,12 @@ function registrarHistorico(t) {
   if (!t || !t.exercicios.length) return;
   const data = hoje();
   if (historico.some(h => h.treinoId === t.id && h.data === data)) return;
-
   const ex = estado[t.id] || {};
   const exercicios = t.exercicios.map((e, i) => ({
     nome: e.nome,
     series: (ex[i] || []).filter(Boolean).length,
     carga: e.carga || ''
   }));
-
   historico.unshift({
     data: data,
     hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -400,15 +428,12 @@ function renderHistorico() {
     lista.innerHTML = '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
     return;
   }
-
   const grupos = {};
   historico.forEach(h => {
     if (!grupos[h.data]) grupos[h.data] = [];
     grupos[h.data].push(h);
   });
-
   const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-
   lista.innerHTML = datas.map(data => {
     const titulo = capitalizar(
       new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -433,36 +458,55 @@ function renderHistorico() {
 
 // ---------- 7. SOM (Web Audio API — sem arquivo de áudio) ----------
 let audioCtx = null;
-function tocarSom(tipo) {
+
+// Cria/retoma o áudio DENTRO de um gesto do usuário (exigência de autoplay)
+function desbloquearAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  } catch (e) {}
+}
+
+function beep(freq, dur, vol, atraso) {
+  if (!audioCtx) return;
+  try {
+    const t0 = audioCtx.currentTime + (atraso || 0);
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.type = 'sine';
-
-    let freq = 660, dur = 0.5, vol = 0.4;
-    if (tipo === 'exec') { freq = 880; }
-    else if (tipo === 'descanso') { freq = 660; }
-    else if (tipo === 'tick') { freq = 1100; dur = 0.09; vol = 0.22; }
-
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + dur);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.start(t0);
+    osc.stop(t0 + dur);
     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
-  } catch (e) { /* áudio indisponível */ }
+  } catch (e) {}
 }
 
-// ---------- 8. TIMER ----------
+function tocarSom(tipo) {
+  if (!audioCtx) return;
+  if (tipo === 'tick') {
+    beep(1200, 0.14, 0.35);          // bip curto a cada segundo nos 10s finais
+  } else if (tipo === 'exec') {
+    beep(880, 0.35, 0.45);           // fim da execução: bip longo duplo
+    beep(880, 0.35, 0.45, 0.45);
+  } else if (tipo === 'descanso') {
+    beep(660, 0.35, 0.45);           // fim do descanso: bip longo duplo
+    beep(660, 0.35, 0.45, 0.45);
+  }
+}
+
+// ---------- 8. TIMER (contagem por tempo real + bipes) ----------
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
 let timerRodando = false;
+let timerEnd = 0;
+let timerFinalTipo = 'descanso';
+let ultimoTick = -1;
 
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
@@ -488,6 +532,9 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   timerRestante = segundos;
   timerTotal = segundos;
   timerRodando = true;
+  timerEnd = Date.now() + segundos * 1000;
+  timerFinalTipo = titulo === 'Tempo de execução' ? 'exec' : 'descanso';
+  ultimoTick = -1;
 
   document.getElementById('timerTitulo').textContent = titulo;
   document.getElementById('timerExercicio').textContent = nomeExercicio || '';
@@ -499,41 +546,34 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   modal.classList.add('aberto');
 
   clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    if (!timerRodando) return;
-    timerRestante--;
-    numero.textContent = timerRestante;
-    ring.style.strokeDashoffset = C * (1 - timerRestante / timerTotal);
-
-    // Bip a cada segundo nos 10s finais
-    if (timerRestante <= 10 && timerRestante > 0) tocarSom('tick');
-
-    if (timerRestante <= 0) {
-      clearInterval(timerInterval);
-      modal.classList.remove('aberto');
-      tocarSom(titulo === 'Tempo de execução' ? 'exec' : 'descanso');
-      if (typeof aoTerminar === 'function') aoTerminar();
-    }
-  }, 1000);
+  timerInterval = setInterval(stepTimer, 250);
 }
 
-document.getElementById('timerFechar').addEventListener('click', () => {
-  clearInterval(timerInterval);
-  document.getElementById('modalTimer').classList.remove('aberto');
-});
+function stepTimer() {
+  if (!timerRodando) return;
+  const restante = Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000));
+  timerRestante = restante;
 
-document.getElementById('timerPausar').addEventListener('click', () => {
-  timerRodando = !timerRodando;
-  document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
-});
+  document.getElementById('timerNumero').textContent = restante;
+  const ring = document.getElementById('timerRing');
+  const C = 2 * Math.PI * 52;
+  ring.style.strokeDashoffset = C * (1 - restante / timerTotal);
 
-// ---------- 9. INICIALIZAÇÃO ----------
-document.querySelectorAll('[data-view]').forEach(el => {
-  el.addEventListener('click', () => navegar(el.dataset.view));
-});
-document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
+  // Bip a cada segundo nos 10s finais (uma vez por segundo contado)
+  if (restante <= 10 && restante > 0 && restante !== ultimoTick) {
+    ultimoTick = restante;
+    tocarSom('tick');
+  }
 
-carregarTreinos();
-carregarEstado();
-carregarHistorico();
-navegar('treinos');
+  if (restante <= 0) {
+    clearInterval(timerInterval);
+    document.getElementById('modalTimer').classList.remove('aberto');
+    tocarSom(timerFinalTipo);        // bip longo no fim
+    if (arguments.length) { /* nada */ }
+  }
+}
+
+// aoTerminar é chamado separadamente sem depender de arguments
+let aoTerminarCallback = null;
+
+// (abrirTimer acima já existe; aqui conectamos o callback
