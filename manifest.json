@@ -1,0 +1,18 @@
+{
+  "name": "itrainer",
+  "short_name": "itrainer",
+  "description": "Treinos de musculação, spinning, jump e muay thai.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#121214",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
