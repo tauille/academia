@@ -2,14 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <!-- viewport-fit=cover: usa a área atrás do notch/barra de status -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
-  <meta name="description" content="itrainer - App de treinos para academia: séries, timers e progresso.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0b0b0e">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="itrainer">
   <title>itrainer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,12 +12,71 @@
 </head>
 <body>
 
-  <!-- SHELL: cabeçalho fixo -->
   <header class="app-header">
     <div class="header-inner">
-      <button class="logo" data-view="inicio">i<span>trainer</span></button>
-      <span class="header-day" id="headerDay"></span>
+      <button class="logo" data-view="treinos">i<span>trainer</span></button>
     </div>
   </header>
 
-  <!-- SHELL: área de conteúdo rolável (única, com scroll
+  <main class="app-main" id="appMain">
+
+    <!-- TELA TREINOS (execução) -->
+    <section class="view active" id="view-treinos">
+      <div class="container">
+        <div id="listaTreinos"></div>
+      </div>
+    </section>
+
+    <!-- TELA GERENCIAR (cadastro) -->
+    <section class="view" id="view-gerenciar">
+      <div class="container">
+        <div class="section-titulo">
+          <h2>Gerenciar</h2>
+          <p>Crie ou edite treinos e exercícios.</p>
+        </div>
+        <div id="listaGerenciar"></div>
+        <button class="btn btn-primary btn-bloco" id="btnNovoTreino">+ Novo treino</button>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-view="treinos">
+      <span class="nav-icone">🏋️</span><span>Treinos</span>
+    </button>
+    <button class="nav-item" data-view="gerenciar">
+      <span class="nav-icone">⚙️</span><span>Gerenciar</span>
+    </button>
+  </nav>
+
+  <!-- MODAL TIMER -->
+  <div class="modal" id="modalTimer">
+    <div class="modal-sheet">
+      <span class="timer-titulo" id="timerTitulo">Descanso</span>
+      <span class="timer-exercicio" id="timerExercicio"></span>
+      <div class="timer-ring-wrap">
+        <svg class="ring timer-ring" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"/>
+          <circle class="ring-fill timer-ring-fill" id="timerRing" cx="60" cy="60" r="52"/>
+        </svg>
+        <div class="timer-numero" id="timerNumero">90</div>
+      </div>
+      <div class="timer-botoes">
+        <button class="btn btn-outline" id="timerPausar">Pausar</button>
+        <button class="btn btn-primary" id="timerFechar">Pular</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITOR -->
+  <div class="modal" id="modalEditor">
+    <div class="modal-sheet modal-editor">
+      <div id="editorCorpo"></div>
+    </div>
+  </div>
+
+  <script src="js/config.js" defer></script>
+  <script src="js/main.js" defer></script>
+</body>
+</html>
