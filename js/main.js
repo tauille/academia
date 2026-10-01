@@ -1,24 +1,22 @@
 /* ==========================================================================
-   itrainer — Lógica do app (CRUD + execução + timer)
-   1. Armazenamento (com validação — corrige tela vazia)
+   itrainer — Lógica do app (CRUD + execução + timer com som)
+   1. Armazenamento
    2. Navegação
    3. Listar treinos
    4. Executar treino (séries + timer)
-   5. Gerenciar (listar / criar / editar / excluir)
-   6. Timer (descanso e exercício por tempo)
-   7. Toast
-   8. Inicialização
+   5. Gerenciar (CRUD)
+   6. Som
+   7. Timer (execução + descanso em sequência)
+   8. Toast
+   9. Inicialização
    ========================================================================== */
 
-// ---------- 1. ARMAZENAMENTO ----------
-// Chaves novas (-v3): dados antigos de versões anteriores ficam ignorados,
-// impedindo que formato incompatível trave a renderização (tela vazia).
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 
-let treinos = null;      // lista de treinos
-let estado = {};         // { treinoId: { exIndex: [bool, ...] } }
-let treinoAtivo = null;  // treino em execução
+let treinos = null;
+let estado = {};
+let treinoAtivo = null;
 
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 
@@ -27,18 +25,15 @@ function carregarTreinos() {
     const raw = localStorage.getItem(STORAGE_TREINOS);
     if (raw) {
       const dados = JSON.parse(raw);
-      // Só aceita se for lista válida (evita dado corrompido de versão antiga)
-      if (Array.isArray(dados) && dados.length >= 0 &&
-          dados.every(t => t && t.id && Array.isArray(t.exercicios))) {
+      if (Array.isArray(dados) && dados.every(t => t && t.id && Array.isArray(t.exercicios))) {
         treinos = dados;
         return;
       }
     }
-  } catch (e) { /* ignora e recria */ }
+  } catch (e) {}
   treinos = JSON.parse(JSON.stringify(CONFIG.treinos));
   salvarTreinos();
 }
-
 function salvarTreinos() { localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos)); }
 
 function carregarEstado() {
@@ -46,15 +41,11 @@ function carregarEstado() {
     const raw = localStorage.getItem(STORAGE_ESTADO);
     if (raw) {
       const dados = JSON.parse(raw);
-      if (dados && typeof dados === 'object' && !Array.isArray(dados)) {
-        estado = dados;
-        return;
-      }
+      if (dados && typeof dados === 'object' && !Array.isArray(dados)) { estado = dados; return; }
     }
-  } catch (e) { /* ignora */ }
+  } catch (e) {}
   estado = {};
 }
-
 function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); }
 
 function mostrarToast(msg) {
@@ -71,7 +62,6 @@ function navegar(viewId) {
   document.getElementById('view-' + viewId).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
   document.getElementById('appMain').scrollTop = 0;
-
   if (viewId === 'treinos') renderTreinos();
   if (viewId === 'gerenciar') renderGerenciar();
 }
@@ -79,21 +69,17 @@ function navegar(viewId) {
 // ---------- 3. LISTAR TREINOS ----------
 function renderTreinos() {
   const lista = document.getElementById('listaTreinos');
-
   if (treinoAtivo) { renderExecucao(); return; }
-
   if (!treinos.length) {
     lista.innerHTML = '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>Gerenciar</b> e crie o primeiro.</div>';
     return;
   }
-
   lista.innerHTML = treinos.map(t => {
     const ex = estado[t.id] || {};
     const total = t.exercicios.length;
     const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
     const pct = total ? Math.round((feitos / total) * 100) : 0;
     const concluido = total > 0 && feitos === total;
-
     return `
       <div class="treino-card ${concluido ? 'concluido' : ''}" data-abrir="${t.id}">
         <div class="treino-topo">
@@ -104,7 +90,6 @@ function renderTreinos() {
         <div class="treino-progresso"><div class="fill" style="width:${pct}%"></div></div>
       </div>`;
   }).join('');
-
   lista.querySelectorAll('[data-abrir]').forEach(card => {
     card.addEventListener('click', () => {
       treinoAtivo = treinos.find(t => t.id === card.dataset.abrir);
@@ -118,7 +103,6 @@ function renderExecucao() {
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
   if (!t) { renderTreinos(); return; }
-
   const ex = estado[t.id] || {};
   const total = t.exercicios.length;
   const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
@@ -134,16 +118,14 @@ function renderExecucao() {
       </div>
     </div>`;
 
-  if (!total) {
-    html += '<div class="vazio">Este treino não tem exercícios.<br>Edite em Gerenciar para adicionar.</div>';
-  }
+  if (!total) html += '<div class="vazio">Este treino não tem exercícios.<br>Edite em Gerenciar para adicionar.</div>';
 
   t.exercicios.forEach((exer, i) => {
     const feitas = (ex[i] || []).filter(Boolean).length;
     const exConcluido = feitas >= exer.series;
     const tempo = tempoEmSegundos(exer.repeticoes);
     const metaTempo = tempo > 0
-      ? `<span class="chip">⏱️ <strong>${exer.repeticoes}</strong></span>`
+      ? `<span class="chip">⏱️ <strong>${exer.repeticoes}</strong> execução</span>`
       : `<span class="chip">🔁 <strong>${exer.repeticoes}</strong> reps</span>`;
 
     html += `
@@ -156,7 +138,7 @@ function renderExecucao() {
               <span class="chip">${exer.equipamento || '—'}</span>
               <span class="chip">📦 <strong>${exer.series}</strong> séries</span>
               ${metaTempo}
-              <span class="chip">⏳ <strong>${exer.descanso}s</strong></span>
+              <span class="chip">⏳ descanso <strong>${exer.descanso}s</strong></span>
               ${exer.carga ? `<span class="chip">⚖️ <strong>${exer.carga}kg</strong></span>` : ''}
             </div>
           </div>
@@ -178,15 +160,10 @@ function renderExecucao() {
 
   lista.innerHTML = html;
 
-  document.getElementById('voltarTreinos').addEventListener('click', () => {
-    treinoAtivo = null;
-    renderTreinos();
-  });
-
+  document.getElementById('voltarTreinos').addEventListener('click', () => { treinoAtivo = null; renderTreinos(); });
   lista.querySelectorAll('.serie').forEach(btn => {
     btn.addEventListener('click', () => marcarSerie(Number(btn.dataset.ex), Number(btn.dataset.serie)));
   });
-
   const btnConcluir = document.getElementById('btnConcluir');
   if (btnConcluir) btnConcluir.addEventListener('click', concluirTreino);
 }
@@ -205,12 +182,16 @@ function marcarSerie(exIndex, serieIndex) {
 
   if (marcou) {
     const tempo = tempoEmSegundos(exer.repeticoes);
-    if (tempo > 0) abrirTimer(tempo, 'Tempo do exercício', exer.nome);
-    else if (exer.descanso > 0) abrirTimer(exer.descanso, 'Descanso', exer.nome);
-
+    if (tempo > 0) {
+      // Exercício por tempo: cronômetro de EXECUÇÃO e, ao zerar, DESCANS0 em sequência
+      abrirTimer(tempo, 'Tempo de execução', exer.nome, () => {
+        if (exer.descanso > 0) abrirTimer(exer.descanso, 'Descanso', exer.nome);
+      });
+    } else if (exer.descanso > 0) {
+      abrirTimer(exer.descanso, 'Descanso', exer.nome);
+    }
     if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
   }
-
   renderExecucao();
 }
 
@@ -220,10 +201,7 @@ function concluirTreino() {
   const ex = estado[t.id] || {};
   const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
   const tudoFeito = feitos === t.exercicios.length;
-
-  t.exercicios.forEach((e, i) => {
-    ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true);
-  });
+  t.exercicios.forEach((e, i) => { ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true); });
   estado[t.id] = ex;
   salvarEstado();
   mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
@@ -233,12 +211,10 @@ function concluirTreino() {
 // ---------- 5. GERENCIAR (CRUD) ----------
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
-
   if (!treinos.length) {
     lista.innerHTML = '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>+ Novo treino</b>.</div>';
     return;
   }
-
   lista.innerHTML = treinos.map(t => `
     <div class="dia-gerenciar">
       <div class="dia-gerenciar-info">
@@ -250,21 +226,14 @@ function renderGerenciar() {
         <button class="btn btn-danger btn-pequeno" data-excluir="${t.id}">Excluir</button>
       </div>
     </div>`).join('');
-
-  lista.querySelectorAll('[data-editar]').forEach(btn => {
-    btn.addEventListener('click', () => abrirEditor(btn.dataset.editar));
-  });
-
-  lista.querySelectorAll('[data-excluir]').forEach(btn => {
-    btn.addEventListener('click', () => excluirTreino(btn.dataset.excluir));
-  });
+  lista.querySelectorAll('[data-editar]').forEach(btn => btn.addEventListener('click', () => abrirEditor(btn.dataset.editar)));
+  lista.querySelectorAll('[data-excluir]').forEach(btn => btn.addEventListener('click', () => excluirTreino(btn.dataset.excluir)));
 }
 
 function excluirTreino(id) {
   const t = treinos.find(x => x.id === id);
   if (!t) return;
-  const confirmou = confirm(`Excluir o treino "${t.nome}"?`);
-  if (!confirmou) return;
+  if (!confirm(`Excluir o treino "${t.nome}"?`)) return;
   treinos = treinos.filter(x => x.id !== id);
   delete estado[id];
   salvarTreinos();
@@ -278,7 +247,6 @@ function excluirTreino(id) {
 function abrirEditor(treinoId) {
   const modal = document.getElementById('modalEditor');
   const corpo = document.getElementById('editorCorpo');
-
   let treino;
   let novo = false;
 
@@ -286,11 +254,7 @@ function abrirEditor(treinoId) {
     treino = treinos.find(t => t.id === treinoId);
     if (!treino) return;
   } else {
-    treino = {
-      id: 't' + Date.now(),
-      nome: '',
-      exercicios: [{ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' }]
-    };
+    treino = { id: 't' + Date.now(), nome: '', exercicios: [{ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' }] };
     novo = true;
   }
 
@@ -324,15 +288,11 @@ function abrirEditor(treinoId) {
     }));
   };
 
-  const opcoesIcone = Object.keys(ICONES)
-    .map(k => `<option value="${k}">${k}</option>`).join('');
-
   const renderRows = () => {
     cont.innerHTML = '';
     treino.exercicios.forEach((ex, i) => {
       const sel = Object.keys(ICONES)
         .map(k => `<option value="${k}" ${ex.icone === k ? 'selected' : ''}>${k}</option>`).join('');
-
       const row = document.createElement('div');
       row.className = 'ed-exercicio';
       row.innerHTML = `
@@ -343,12 +303,11 @@ function abrirEditor(treinoId) {
         </div>
         <div class="ed-linha">
           <input type="number" class="ed-series" value="${ex.series}" min="1" placeholder="Séries">
-          <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="Reps/45s">
+          <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="Reps ou 45s">
           <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="Desc(s)">
           <input type="text" class="ed-carga" value="${ex.carga}" placeholder="Carga">
         </div>
         <button class="btn btn-outline btn-pequeno ed-remover">Remover exercício</button>`;
-
       row.querySelector('.ed-remover').addEventListener('click', () => {
         coletar();
         treino.exercicios.splice(i, 1);
@@ -369,10 +328,8 @@ function abrirEditor(treinoId) {
     coletar();
     treino.exercicios = treino.exercicios.filter(e => e.nome !== '');
     treino.nome = corpo.querySelector('#edNome').value.trim() || 'Treino';
-
-    if (novo) {
-      treinos.push(treino);
-    } else {
+    if (novo) treinos.push(treino);
+    else {
       const idx = treinos.findIndex(t => t.id === treino.id);
       if (idx !== -1) treinos[idx] = treino;
     }
@@ -384,25 +341,39 @@ function abrirEditor(treinoId) {
   });
 
   const btnExcluir = corpo.querySelector('#edExcluir');
-  if (btnExcluir) {
-    btnExcluir.addEventListener('click', () => {
-      modal.classList.remove('aberto');
-      excluirTreino(treino.id);
-    });
-  }
+  if (btnExcluir) btnExcluir.addEventListener('click', () => { modal.classList.remove('aberto'); excluirTreino(treino.id); });
 
   corpo.querySelector('#editorFechar').addEventListener('click', () => modal.classList.remove('aberto'));
-
   modal.classList.add('aberto');
 }
 
-// ---------- 6. TIMER ----------
+// ---------- 6. SOM (Web Audio API — sem arquivo de áudio) ----------
+let audioCtx = null;
+function tocarSom(tipo) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = tipo === 'exec' ? 880 : 660;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.5);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+  } catch (e) { /* áudio indisponível */ }
+}
+
+// ---------- 7. TIMER ----------
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
 let timerRodando = false;
 
-// Converte "45s", "3 min" em segundos. Retorna 0 se não for tempo.
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
   const t = String(texto).toLowerCase();
@@ -418,7 +389,8 @@ function tempoEmSegundos(texto) {
   return 0;
 }
 
-function abrirTimer(segundos, titulo, nomeExercicio) {
+// abrirTimer(segundos, título, nome, aoTerminar)
+function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   const modal = document.getElementById('modalTimer');
   const numero = document.getElementById('timerNumero');
   const ring = document.getElementById('timerRing');
@@ -446,7 +418,8 @@ function abrirTimer(segundos, titulo, nomeExercicio) {
     if (timerRestante <= 0) {
       clearInterval(timerInterval);
       modal.classList.remove('aberto');
-      mostrarToast('⏰ Tempo encerrado!');
+      tocarSom(titulo === 'Tempo de execução' ? 'exec' : 'descanso');
+      if (typeof aoTerminar === 'function') aoTerminar();
     }
   }, 1000);
 }
@@ -461,11 +434,10 @@ document.getElementById('timerPausar').addEventListener('click', () => {
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
-// ---------- 7. INICIALIZAÇÃO ----------
+// ---------- 8. INICIALIZAÇÃO ----------
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
-
 document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
 
 carregarTreinos();
