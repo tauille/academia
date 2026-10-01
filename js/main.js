@@ -1,33 +1,69 @@
 /* ==========================================================================
-   itrainer — Lógica (versão enxuta)
-   1. Estado e dados
+   itrainer — Lógica do app (CRUD + execução + timer)
+   1. Armazenamento (com validação — corrige tela vazia)
    2. Navegação
-   3. Tela Treinos (execução)
-   4. Controle de séries + timer
-   5. Tela Gerenciar (cadastro)
-   6. Timer
-   7. Inicialização
+   3. Listar treinos
+   4. Executar treino (séries + timer)
+   5. Gerenciar (listar / criar / editar / excluir)
+   6. Timer (descanso e exercício por tempo)
+   7. Toast
+   8. Inicialização
    ========================================================================== */
 
-// ---------- 1. ESTADO E DADOS ----------
-let treinos = null;
-let treinoAtivo = null;   // treino em execução
-let estado = {};          // { treinoId: { exIndex: [bool,...] } }
+// ---------- 1. ARMAZENAMENTO ----------
+// Chaves novas (-v3): dados antigos de versões anteriores ficam ignorados,
+// impedindo que formato incompatível trave a renderização (tela vazia).
+const STORAGE_TREINOS = 'itrainer-treinos-v3';
+const STORAGE_ESTADO = 'itrainer-estado-v3';
+
+let treinos = null;      // lista de treinos
+let estado = {};         // { treinoId: { exIndex: [bool, ...] } }
+let treinoAtivo = null;  // treino em execução
 
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 
 function carregarTreinos() {
-  try { treinos = JSON.parse(localStorage.getItem('itrainer-treinos')) || null; }
-  catch (e) { treinos = null; }
-  if (!treinos) treinos = JSON.parse(JSON.stringify(CONFIG.treinos));
+  try {
+    const raw = localStorage.getItem(STORAGE_TREINOS);
+    if (raw) {
+      const dados = JSON.parse(raw);
+      // Só aceita se for lista válida (evita dado corrompido de versão antiga)
+      if (Array.isArray(dados) && dados.length >= 0 &&
+          dados.every(t => t && t.id && Array.isArray(t.exercicios))) {
+        treinos = dados;
+        return;
+      }
+    }
+  } catch (e) { /* ignora e recria */ }
+  treinos = JSON.parse(JSON.stringify(CONFIG.treinos));
+  salvarTreinos();
 }
-function salvarTreinos() { localStorage.setItem('itrainer-treinos', JSON.stringify(treinos)); }
+
+function salvarTreinos() { localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos)); }
 
 function carregarEstado() {
-  try { estado = JSON.parse(localStorage.getItem('itrainer-estado')) || {}; }
-  catch (e) { estado = {}; }
+  try {
+    const raw = localStorage.getItem(STORAGE_ESTADO);
+    if (raw) {
+      const dados = JSON.parse(raw);
+      if (dados && typeof dados === 'object' && !Array.isArray(dados)) {
+        estado = dados;
+        return;
+      }
+    }
+  } catch (e) { /* ignora */ }
+  estado = {};
 }
-function salvarEstado() { localStorage.setItem('itrainer-estado', JSON.stringify(estado)); }
+
+function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); }
+
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('mostrar');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
+}
 
 // ---------- 2. NAVEGAÇÃO ----------
 function navegar(viewId) {
@@ -40,26 +76,21 @@ function navegar(viewId) {
   if (viewId === 'gerenciar') renderGerenciar();
 }
 
-document.querySelectorAll('[data-view]').forEach(el => {
-  el.addEventListener('click', () => navegar(el.dataset.view));
-});
-
-// ---------- 3. TELA TREINOS ----------
+// ---------- 3. LISTAR TREINOS ----------
 function renderTreinos() {
   const lista = document.getElementById('listaTreinos');
 
-  // Se um treino está em execução, mostra a execução
   if (treinoAtivo) { renderExecucao(); return; }
 
   if (!treinos.length) {
-    lista.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:2rem;">Nenhum treino cadastrado. Vá em Gerenciar para criar um.</p>';
+    lista.innerHTML = '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>Gerenciar</b> e crie o primeiro.</div>';
     return;
   }
 
   lista.innerHTML = treinos.map(t => {
     const ex = estado[t.id] || {};
     const total = t.exercicios.length;
-    const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length === t.exercicios[i].series).length;
+    const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
     const pct = total ? Math.round((feitos / total) * 100) : 0;
     const concluido = total > 0 && feitos === total;
 
@@ -69,7 +100,7 @@ function renderTreinos() {
           <h3>${t.nome}</h3>
           <span class="chip">${feitos}/${total} ${concluido ? '✓' : ''}</span>
         </div>
-        <div class="treino-meta">${t.exercicios.length} exercícios</div>
+        <div class="treino-meta">${total} exercício(s)</div>
         <div class="treino-progresso"><div class="fill" style="width:${pct}%"></div></div>
       </div>`;
   }).join('');
@@ -82,41 +113,47 @@ function renderTreinos() {
   });
 }
 
-// ---------- EXECUÇÃO DO TREINO ----------
+// ---------- 4. EXECUTAR TREINO ----------
 function renderExecucao() {
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
-  const ex = estado[t.id] || {};
+  if (!t) { renderTreinos(); return; }
 
+  const ex = estado[t.id] || {};
   const total = t.exercicios.length;
-  const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length === t.exercicios[i].series).length;
+  const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
   const pct = total ? Math.round((feitos / total) * 100) : 0;
+  const concluido = total > 0 && feitos === total;
 
   let html = `
     <div class="exec-cabecalho">
       <button class="voltar" id="voltarTreinos">←</button>
       <div>
         <h1>${t.nome}</h1>
-        <div class="treino-progresso" style="margin-top:0.4rem;"><div class="fill" style="width:${pct}%"></div></div>
+        <div class="treino-progresso"><div class="fill" style="width:${pct}%"></div></div>
       </div>
     </div>`;
 
+  if (!total) {
+    html += '<div class="vazio">Este treino não tem exercícios.<br>Edite em Gerenciar para adicionar.</div>';
+  }
+
   t.exercicios.forEach((exer, i) => {
-    const seriesFeitas = (ex[i] || []).filter(Boolean).length;
-    const concluido = seriesFeitas === exer.series;
+    const feitas = (ex[i] || []).filter(Boolean).length;
+    const exConcluido = feitas >= exer.series;
     const tempo = tempoEmSegundos(exer.repeticoes);
     const metaTempo = tempo > 0
       ? `<span class="chip">⏱️ <strong>${exer.repeticoes}</strong></span>`
       : `<span class="chip">🔁 <strong>${exer.repeticoes}</strong> reps</span>`;
 
     html += `
-      <div class="exercicio ${concluido ? 'concluido' : ''}">
+      <div class="exercicio ${exConcluido ? 'concluido' : ''}">
         <div class="exercicio-topo">
-          <div class="icon-badge">${iconeSvg(exer.icone)}</div>
+          <div class="icon-badge" title="${exer.equipamento}">${iconeSvg(exer.icone)}</div>
           <div>
             <h3>${i + 1}. ${exer.nome}</h3>
             <div class="exercicio-meta">
-              <span class="chip">${exer.equipamento || ''}</span>
+              <span class="chip">${exer.equipamento || '—'}</span>
               <span class="chip">📦 <strong>${exer.series}</strong> séries</span>
               ${metaTempo}
               <span class="chip">⏳ <strong>${exer.descanso}s</strong></span>
@@ -133,28 +170,31 @@ function renderExecucao() {
       </div>`;
   });
 
-  html += `
-    <button class="btn ${feitos === total ? 'btn-outline' : 'btn-primary'} btn-bloco" id="btnConcluirTreino">
-      ${feitos === total ? '✓ Treino concluído' : 'Concluir treino'}
+  if (total) {
+    html += `<button class="btn ${concluido ? 'btn-outline' : 'btn-primary'} btn-bloco" id="btnConcluir">
+      ${concluido ? 'Desmarcar treino' : 'Concluir treino'}
     </button>`;
+  }
 
   lista.innerHTML = html;
 
-  document.getElementById('voltarTreinos').addEventListener('click', () => { treinoAtivo = null; renderTreinos(); });
+  document.getElementById('voltarTreinos').addEventListener('click', () => {
+    treinoAtivo = null;
+    renderTreinos();
+  });
 
   lista.querySelectorAll('.serie').forEach(btn => {
     btn.addEventListener('click', () => marcarSerie(Number(btn.dataset.ex), Number(btn.dataset.serie)));
   });
 
-  document.getElementById('btnConcluirTreino').addEventListener('click', () => {
-    marcarTreinoConcluido();
-  });
+  const btnConcluir = document.getElementById('btnConcluir');
+  if (btnConcluir) btnConcluir.addEventListener('click', concluirTreino);
 }
 
-// ---------- 4. CONTROLE DE SÉRIES ----------
 function marcarSerie(exIndex, serieIndex) {
   const t = treinoAtivo;
-  const ex = t.exercicios[exIndex];
+  if (!t) return;
+  const exer = t.exercicios[exIndex];
   if (!estado[t.id]) estado[t.id] = {};
   if (!estado[t.id][exIndex]) estado[t.id][exIndex] = [];
 
@@ -164,32 +204,38 @@ function marcarSerie(exIndex, serieIndex) {
   salvarEstado();
 
   if (marcou) {
-    const tempo = tempoEmSegundos(ex.repeticoes);
-    if (tempo > 0) abrirTimer(tempo, 'Tempo do exercício', ex.nome);
-    else if (ex.descanso > 0) abrirTimer(ex.descanso, 'Descanso', ex.nome);
+    const tempo = tempoEmSegundos(exer.repeticoes);
+    if (tempo > 0) abrirTimer(tempo, 'Tempo do exercício', exer.nome);
+    else if (exer.descanso > 0) abrirTimer(exer.descanso, 'Descanso', exer.nome);
+
+    if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
   }
 
   renderExecucao();
 }
 
-function marcarTreinoConcluido() {
+function concluirTreino() {
   const t = treinoAtivo;
+  if (!t || !t.exercicios.length) return;
   const ex = estado[t.id] || {};
-  t.exercicios.forEach((exer, i) => {
-    if (!ex[i]) ex[i] = [];
-    for (let s = 0; s < exer.series; s++) ex[i][s] = true;
+  const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
+  const tudoFeito = feitos === t.exercicios.length;
+
+  t.exercicios.forEach((e, i) => {
+    ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true);
   });
   estado[t.id] = ex;
   salvarEstado();
+  mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
   renderExecucao();
 }
 
-// ---------- 5. TELA GERENCIAR ----------
+// ---------- 5. GERENCIAR (CRUD) ----------
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
 
   if (!treinos.length) {
-    lista.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:1rem;">Nenhum treino cadastrado.</p>';
+    lista.innerHTML = '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>+ Novo treino</b>.</div>';
     return;
   }
 
@@ -197,19 +243,36 @@ function renderGerenciar() {
     <div class="dia-gerenciar">
       <div class="dia-gerenciar-info">
         <strong>${t.nome}</strong>
-        <span>${t.exercicios.length} exercícios</span>
+        <span>${t.exercicios.length} exercício(s)</span>
       </div>
-      <button class="btn btn-outline btn-pequeno" data-editar="${t.id}">Editar</button>
+      <div class="dia-gerenciar-acoes">
+        <button class="btn btn-outline btn-pequeno" data-editar="${t.id}">Editar</button>
+        <button class="btn btn-danger btn-pequeno" data-excluir="${t.id}">Excluir</button>
+      </div>
     </div>`).join('');
 
   lista.querySelectorAll('[data-editar]').forEach(btn => {
     btn.addEventListener('click', () => abrirEditor(btn.dataset.editar));
   });
+
+  lista.querySelectorAll('[data-excluir]').forEach(btn => {
+    btn.addEventListener('click', () => excluirTreino(btn.dataset.excluir));
+  });
 }
 
-document.getElementById('btnNovoTreino').addEventListener('click', () => {
-  abrirEditor(null);
-});
+function excluirTreino(id) {
+  const t = treinos.find(x => x.id === id);
+  if (!t) return;
+  const confirmou = confirm(`Excluir o treino "${t.nome}"?`);
+  if (!confirmou) return;
+  treinos = treinos.filter(x => x.id !== id);
+  delete estado[id];
+  salvarTreinos();
+  salvarEstado();
+  mostrarToast('Treino excluído');
+  renderGerenciar();
+  if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
+}
 
 // ---------- EDITOR ----------
 function abrirEditor(treinoId) {
@@ -218,10 +281,16 @@ function abrirEditor(treinoId) {
 
   let treino;
   let novo = false;
+
   if (treinoId) {
     treino = treinos.find(t => t.id === treinoId);
+    if (!treino) return;
   } else {
-    treino = { id: 't' + Date.now(), nome: '', exercicios: [{ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' }] };
+    treino = {
+      id: 't' + Date.now(),
+      nome: '',
+      exercicios: [{ nome: '', icone: 'halteres', equipamento: '', series: 3, repeticoes: '12', descanso: 60, carga: '' }]
+    };
     novo = true;
   }
 
@@ -235,7 +304,7 @@ function abrirEditor(treinoId) {
       <input type="text" id="edNome" value="${treino.nome}" placeholder="Ex.: Peito e Tríceps">
     </label>
     <div id="edExercicios"></div>
-    <button class="btn btn-outline btn-bloco" id="edAdicionar">+ Adicionar exercício</button>
+    <button class="btn btn-outline btn-bloco" id="edAdicionar" style="margin-top:0;">+ Adicionar exercício</button>
     <div class="editor-acoes">
       <button class="btn btn-primary" id="edSalvar">Salvar treino</button>
       ${novo ? '' : '<button class="btn btn-danger" id="edExcluir">Excluir treino</button>'}
@@ -246,7 +315,7 @@ function abrirEditor(treinoId) {
   const coletar = () => {
     treino.exercicios = Array.from(cont.querySelectorAll('.ed-exercicio')).map(row => ({
       nome: row.querySelector('.ed-nome').value.trim(),
-      icone: row.querySelector('.ed-icone').value.trim() || 'halteres',
+      icone: row.querySelector('.ed-icone').value || 'halteres',
       equipamento: row.querySelector('.ed-equipamento').value.trim(),
       series: Number(row.querySelector('.ed-series').value) || 3,
       repeticoes: row.querySelector('.ed-reps').value.trim() || '12',
@@ -255,24 +324,31 @@ function abrirEditor(treinoId) {
     }));
   };
 
+  const opcoesIcone = Object.keys(ICONES)
+    .map(k => `<option value="${k}">${k}</option>`).join('');
+
   const renderRows = () => {
     cont.innerHTML = '';
     treino.exercicios.forEach((ex, i) => {
+      const sel = Object.keys(ICONES)
+        .map(k => `<option value="${k}" ${ex.icone === k ? 'selected' : ''}>${k}</option>`).join('');
+
       const row = document.createElement('div');
       row.className = 'ed-exercicio';
       row.innerHTML = `
         <input type="text" class="ed-nome" value="${ex.nome}" placeholder="Nome do exercício">
+        <div class="ed-dupla">
+          <select class="ed-icone">${sel}</select>
+          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equipamento">
+        </div>
         <div class="ed-linha">
-          <input type="text" class="ed-icone" value="${ex.icone}" placeholder="Ícone">
-          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equip.">
           <input type="number" class="ed-series" value="${ex.series}" min="1" placeholder="Séries">
           <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="Reps/45s">
+          <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="Desc(s)">
+          <input type="text" class="ed-carga" value="${ex.carga}" placeholder="Carga">
         </div>
-        <div class="ed-linha">
-          <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="Descanso (s)">
-          <input type="text" class="ed-carga" value="${ex.carga}" placeholder="Carga (kg)">
-        </div>
-        <button class="btn btn-outline btn-pequeno ed-remover">Remover</button>`;
+        <button class="btn btn-outline btn-pequeno ed-remover">Remover exercício</button>`;
+
       row.querySelector('.ed-remover').addEventListener('click', () => {
         coletar();
         treino.exercicios.splice(i, 1);
@@ -293,13 +369,16 @@ function abrirEditor(treinoId) {
     coletar();
     treino.exercicios = treino.exercicios.filter(e => e.nome !== '');
     treino.nome = corpo.querySelector('#edNome').value.trim() || 'Treino';
-    if (novo) treinos.push(treino);
-    else {
+
+    if (novo) {
+      treinos.push(treino);
+    } else {
       const idx = treinos.findIndex(t => t.id === treino.id);
-      treinos[idx] = treino;
+      if (idx !== -1) treinos[idx] = treino;
     }
     salvarTreinos();
     modal.classList.remove('aberto');
+    mostrarToast(novo ? '✅ Treino criado!' : 'Treino atualizado');
     renderGerenciar();
     renderTreinos();
   });
@@ -307,13 +386,8 @@ function abrirEditor(treinoId) {
   const btnExcluir = corpo.querySelector('#edExcluir');
   if (btnExcluir) {
     btnExcluir.addEventListener('click', () => {
-      treinos = treinos.filter(t => t.id !== treino.id);
-      delete estado[treino.id];
-      salvarTreinos();
-      salvarEstado();
       modal.classList.remove('aberto');
-      renderGerenciar();
-      renderTreinos();
+      excluirTreino(treino.id);
     });
   }
 
@@ -328,12 +402,19 @@ let timerRestante = 0;
 let timerTotal = 1;
 let timerRodando = false;
 
+// Converte "45s", "3 min" em segundos. Retorna 0 se não for tempo.
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
   const t = String(texto).toLowerCase();
   if (!/\d/.test(t)) return 0;
-  if (t.includes('min')) { const m = t.match(/([\d.,]+)\s*min/); return m ? Math.round(parseFloat(m[1].replace(',', '.')) * 60) : 0; }
-  if (t.includes('seg') || /(\d)\s*s\b/.test(t)) { const s = t.match(/([\d.,]+)\s*(seg|s)/); return s ? Math.round(parseFloat(s[1].replace(',', '.'))) : 0; }
+  if (t.includes('min')) {
+    const m = t.match(/([\d.,]+)\s*min/);
+    return m ? Math.round(parseFloat(m[1].replace(',', '.')) * 60) : 0;
+  }
+  if (t.includes('seg') || /(\d)\s*s\b/.test(t)) {
+    const s = t.match(/([\d.,]+)\s*(seg|s)/);
+    return s ? Math.round(parseFloat(s[1].replace(',', '.'))) : 0;
+  }
   return 0;
 }
 
@@ -365,6 +446,7 @@ function abrirTimer(segundos, titulo, nomeExercicio) {
     if (timerRestante <= 0) {
       clearInterval(timerInterval);
       modal.classList.remove('aberto');
+      mostrarToast('⏰ Tempo encerrado!');
     }
   }, 1000);
 }
@@ -373,12 +455,19 @@ document.getElementById('timerFechar').addEventListener('click', () => {
   clearInterval(timerInterval);
   document.getElementById('modalTimer').classList.remove('aberto');
 });
+
 document.getElementById('timerPausar').addEventListener('click', () => {
   timerRodando = !timerRodando;
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
 // ---------- 7. INICIALIZAÇÃO ----------
+document.querySelectorAll('[data-view]').forEach(el => {
+  el.addEventListener('click', () => navegar(el.dataset.view));
+});
+
+document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
+
 carregarTreinos();
 carregarEstado();
 navegar('treinos');

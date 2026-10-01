@@ -1,5 +1,5 @@
 /* ==========================================================================
-   itrainer — App de treino (versão enxuta)
+   itrainer — App de treino · versão corrigida
    ========================================================================== */
 
 :root {
@@ -35,6 +35,7 @@ body {
   font-family: var(--font-body);
   line-height: 1.5;
   overflow: hidden;
+  height: 100vh;
   height: 100dvh;
   -webkit-user-select: none;
   user-select: none;
@@ -44,6 +45,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
 button { font-family: var(--font-body); cursor: pointer; border: none; background: none; color: inherit; }
 input, select { font-family: var(--font-body); }
+
 .container { width: 100%; padding: 0 1.1rem; max-width: 720px; margin: 0 auto; }
 
 /* ---------- SHELL ---------- */
@@ -59,6 +61,7 @@ input, select { font-family: var(--font-body); }
 }
 .header-inner { height: var(--header-h); display: flex; align-items: center; padding: 0 1.1rem; }
 .logo { font-family: var(--font-display); font-size: 1.8rem; letter-spacing: 2px; color: var(--text); text-transform: uppercase; }
+.logo:active { opacity: 0.7; }
 .logo span { background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
 .app-main {
@@ -108,6 +111,8 @@ input, select { font-family: var(--font-body); }
 .section-titulo h2 { font-family: var(--font-display); font-size: 2rem; letter-spacing: 1px; text-transform: uppercase; }
 .section-titulo p { color: var(--muted); font-size: 0.88rem; }
 
+.vazio { text-align: center; color: var(--muted); padding: 2.5rem 1rem; font-size: 0.95rem; line-height: 1.6; }
+
 /* ---------- LISTA DE TREINOS ---------- */
 .treino-card {
   background: var(--surface);
@@ -119,16 +124,17 @@ input, select { font-family: var(--font-body); }
 }
 .treino-card:active { transform: scale(0.99); }
 .treino-card.concluido { border-color: rgba(200, 243, 29, 0.45); }
-.treino-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.7rem; }
+.treino-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
 .treino-topo h3 { font-size: 1.05rem; font-weight: 700; }
 .treino-meta { font-size: 0.8rem; color: var(--muted); }
 .treino-progresso { height: 6px; background: var(--surface-3); border-radius: 6px; overflow: hidden; margin-top: 0.8rem; }
 .treino-progresso .fill { height: 100%; background: var(--accent-grad); border-radius: 6px; transition: width 0.4s ease; }
 
-/* ---------- EXECUÇÃO DO TREINO ---------- */
-.exec-cabecalho { display: flex; align-items: center; gap: 0.8rem; margin: 1rem 0 1.2rem; }
-.exec-cabecalho .voltar { font-size: 1.4rem; color: var(--muted); padding: 0.3rem; }
+/* ---------- EXECUÇÃO ---------- */
+.exec-cabecalho { display: flex; align-items: flex-start; gap: 0.6rem; margin: 1rem 0 1.2rem; }
+.exec-cabecalho .voltar { font-size: 1.5rem; color: var(--muted); padding: 0.2rem; line-height: 1; }
 .exec-cabecalho h1 { font-family: var(--font-display); font-size: 1.9rem; letter-spacing: 1px; text-transform: uppercase; line-height: 1.05; }
+.exec-cabecalho > div { flex: 1; }
 
 .exercicio {
   background: var(--surface);
@@ -137,7 +143,7 @@ input, select { font-family: var(--font-body); }
   padding: 1rem 1.1rem;
   margin-bottom: 0.9rem;
 }
-.exercicio.concluido { border-color: rgba(200, 243, 29, 0.45); }
+.exercicio.concluido { border-color: rgba(200, 243, 29, 0.45); background: linear-gradient(160deg, var(--surface) 0%, rgba(200, 243, 29, 0.05) 100%); }
 .exercicio-topo { display: flex; align-items: flex-start; gap: 0.8rem; margin-bottom: 0.9rem; }
 .icon-badge {
   width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
@@ -146,6 +152,7 @@ input, select { font-family: var(--font-body); }
 }
 .icon-badge svg { width: 26px; height: 26px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .exercicio-topo h3 { font-size: 0.98rem; font-weight: 700; line-height: 1.3; margin-bottom: 0.3rem; }
+.exercicio.concluido .exercicio-topo h3 { text-decoration: line-through; color: var(--muted); }
 .exercicio-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .chip {
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -179,9 +186,10 @@ input, select { font-family: var(--font-body); }
   border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 0.8rem;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
 }
-.dia-gerenciar-info { display: flex; flex-direction: column; gap: 0.15rem; }
-.dia-gerenciar-info strong { font-size: 1rem; }
+.dia-gerenciar-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.dia-gerenciar-info strong { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dia-gerenciar-info span { font-size: 0.8rem; color: var(--muted); }
+.dia-gerenciar-acoes { display: flex; gap: 0.5rem; flex-shrink: 0; }
 
 /* ---------- BOTÕES ---------- */
 .btn {
@@ -195,7 +203,7 @@ input, select { font-family: var(--font-body); }
 .btn-outline:active { border-color: var(--accent); color: var(--accent); }
 .btn-danger { background: rgba(248, 113, 113, 0.12); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.3); }
 .btn-bloco { width: 100%; margin-top: 0.8rem; }
-.btn-pequeno { padding: 0.5rem 1rem; font-size: 0.78rem; min-height: 40px; }
+.btn-pequeno { padding: 0.5rem 0.9rem; font-size: 0.78rem; min-height: 40px; }
 
 /* ---------- MODAL (bottom-sheet) ---------- */
 .modal {
@@ -243,10 +251,34 @@ input, select { font-family: var(--font-body); }
   font-size: 0.95rem; min-height: 48px;
 }
 .campo input:focus, .campo select:focus { outline: none; border-color: var(--accent); }
+
 .ed-exercicio { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.8rem; margin-bottom: 0.7rem; }
-.ed-exercicio .ed-nome { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0.6rem 0.8rem; font-size: 0.88rem; margin-bottom: 0.5rem; }
+.ed-nome { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0.6rem 0.8rem; font-size: 0.88rem; margin-bottom: 0.5rem; }
+.ed-dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem; }
+.ed-dupla input, .ed-dupla select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 0.5rem 0.6rem; font-size: 0.8rem;
+}
 .ed-linha { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-bottom: 0.5rem; }
-.ed-linha input { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0.5rem 0.5rem; font-size: 0.76rem; text-align: center; }
-.ed-exercicio .ed-remover { width: 100%; font-size: 0.75rem; }
+.ed-linha input {
+  min-width: 0; width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 0.5rem 0.45rem; font-size: 0.74rem; text-align: center;
+}
+.ed-remover { width: 100%; font-size: 0.75rem; }
 .editor-acoes { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
 .editor-acoes .btn { width: 100%; }
+
+/* ---------- TOAST ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--nav-h) + 16px);
+  transform: translateX(-50%) translateY(20px);
+  background: var(--surface-3); color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 0.8rem 1.3rem; border-radius: 14px;
+  font-size: 0.9rem; font-weight: 600;
+  box-shadow: var(--shadow); z-index: 300;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  max-width: 88%; text-align: center;
+}
+.toast.mostrar { opacity: 1; transform: translateX(-50%) translateY(0); }

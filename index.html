@@ -20,19 +20,19 @@
 
   <main class="app-main" id="appMain">
 
-    <!-- TELA TREINOS (execução) -->
+    <!-- TELA TREINOS (listar + executar) -->
     <section class="view active" id="view-treinos">
       <div class="container">
         <div id="listaTreinos"></div>
       </div>
     </section>
 
-    <!-- TELA GERENCIAR (cadastro) -->
+    <!-- TELA GERENCIAR (CRUD) -->
     <section class="view" id="view-gerenciar">
       <div class="container">
         <div class="section-titulo">
           <h2>Gerenciar</h2>
-          <p>Crie ou edite treinos e exercícios.</p>
+          <p>Crie, edite ou exclua treinos e exercícios.</p>
         </div>
         <div id="listaGerenciar"></div>
         <button class="btn btn-primary btn-bloco" id="btnNovoTreino">+ Novo treino</button>
@@ -50,7 +50,7 @@
     </button>
   </nav>
 
-  <!-- MODAL TIMER -->
+  <!-- TIMER -->
   <div class="modal" id="modalTimer">
     <div class="modal-sheet">
       <span class="timer-titulo" id="timerTitulo">Descanso</span>
@@ -60,7 +60,7 @@
           <circle class="ring-bg" cx="60" cy="60" r="52"/>
           <circle class="ring-fill timer-ring-fill" id="timerRing" cx="60" cy="60" r="52"/>
         </svg>
-        <div class="timer-numero" id="timerNumero">90</div>
+        <div class="timer-numero" id="timerNumero">0</div>
       </div>
       <div class="timer-botoes">
         <button class="btn btn-outline" id="timerPausar">Pausar</button>
@@ -69,12 +69,15 @@
     </div>
   </div>
 
-  <!-- MODAL EDITOR -->
+  <!-- EDITOR DE TREINO -->
   <div class="modal" id="modalEditor">
     <div class="modal-sheet modal-editor">
       <div id="editorCorpo"></div>
     </div>
   </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
 
   <script src="js/config.js" defer></script>
   <script src="js/main.js" defer></script>

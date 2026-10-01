@@ -1,9 +1,9 @@
 /* ==========================================================================
-   itrainer — Dados padrão
-   Cada exercício:
-   - icone: chave em ICONES (SVG do equipamento)
-   - equipamento: nome do aparelho
-   - series, repeticoes, descanso, carga
+   itrainer — Dados padrão (pré-carregados)
+   ---------------------------------------------------------------
+   ICONES: desenhos SVG dos equipamentos (referência visual).
+   Cada exercício usa o campo `icone` com uma das chaves abaixo.
+   Se quiser trocar o desenho, edite o path do SVG.
    ========================================================================== */
 
 const ICONES = {
@@ -16,24 +16,51 @@ const ICONES = {
 };
 
 const CONFIG = {
-  // Treinos padrão (editáveis na tela Gerenciar)
+
+  // Treinos já cadastrados (listados na tela Treinos ao abrir)
   treinos: [
     {
       id: 't1',
       nome: 'Peito e Tríceps',
       exercicios: [
-        { nome: 'Supino no chão com halteres', icone: 'halteres', equipamento: 'Halteres', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
-        { nome: 'Flexão de solo', icone: 'pesoCorporal', equipamento: 'Peso corporal', series: 3, repeticoes: 'até o limite', descanso: 60, carga: '' },
-        { nome: 'Tríceps testa com a barra', icone: 'barra', equipamento: 'Barra', series: 3, repeticoes: '10-12', descanso: 60, carga: '' }
+        { nome: 'Supino no chão com halteres (Floor Press)', icone: 'halteres', equipamento: 'Halteres', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
+        { nome: 'Flexão de solo', icone: 'pesoCorporal', equipamento: 'Peso corporal', series: 3, repeticoes: 'até o limite técnico', descanso: 60, carga: '' },
+        { nome: 'Crucifixo no chão com halteres', icone: 'halteres', equipamento: 'Halteres', series: 3, repeticoes: '12', descanso: 60, carga: '' },
+        { nome: 'Tríceps francês com halter', icone: 'halter', equipamento: 'Halter', series: 3, repeticoes: '12', descanso: 60, carga: '' },
+        { nome: 'Tríceps testa no chão com a barra', icone: 'barra', equipamento: 'Barra', series: 3, repeticoes: '10-12', descanso: 60, carga: '' }
       ]
     },
     {
       id: 't2',
       nome: 'Costas e Bíceps',
       exercicios: [
-        { nome: 'Remada curvada na barra', icone: 'barra', equipamento: 'Barra', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
+        { nome: 'Remada curvada com pegada pronada na barra', icone: 'barra', equipamento: 'Barra', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
+        { nome: 'Remada unilateral (serrote) com halter ou kettlebell', icone: 'halter', equipamento: 'Halter/Kettlebell', series: 3, repeticoes: '12 cada lado', descanso: 60, carga: '' },
+        { nome: 'Levantamento terra com a barra', icone: 'barra', equipamento: 'Barra', series: 3, repeticoes: '10', descanso: 120, carga: '' },
         { nome: 'Rosca direta com a barra', icone: 'barra', equipamento: 'Barra', series: 3, repeticoes: '10-12', descanso: 60, carga: '' },
         { nome: 'Rosca martelo com halteres', icone: 'halteres', equipamento: 'Halteres', series: 3, repeticoes: '12', descanso: 60, carga: '' }
+      ]
+    },
+    {
+      id: 't3',
+      nome: 'Pernas completas',
+      exercicios: [
+        { nome: 'Agachamento Goblet com kettlebell junto ao peito', icone: 'kettlebell', equipamento: 'Kettlebell', series: 4, repeticoes: '12', descanso: 120, carga: '' },
+        { nome: 'Passada estática (afundo) com halteres', icone: 'halteres', equipamento: 'Halteres', series: 3, repeticoes: '10-12 por perna', descanso: 90, carga: '' },
+        { nome: 'Stiff com halteres ou com a barra', icone: 'barra', equipamento: 'Halteres/Barra', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
+        { nome: 'Elevação pélvica no chão com peso sobre o quadril', icone: 'chao', equipamento: 'Halter/Barra', series: 3, repeticoes: '15', descanso: 60, carga: '' },
+        { nome: 'Elevação de panturrilha em pé (unilateral com halter)', icone: 'halter', equipamento: 'Halter', series: 4, repeticoes: '15-20', descanso: 45, carga: '' }
+      ]
+    },
+    {
+      id: 't4',
+      nome: 'Ombros e Trapézio',
+      exercicios: [
+        { nome: 'Desenvolvimento de ombros com halteres', icone: 'halteres', equipamento: 'Halteres', series: 4, repeticoes: '10-12', descanso: 90, carga: '' },
+        { nome: 'Elevação lateral com halteres', icone: 'halteres', equipamento: 'Halteres', series: 4, repeticoes: '12-15', descanso: 60, carga: '' },
+        { nome: 'Crucifixo inverso curvado para posterior de ombro', icone: 'halteres', equipamento: 'Halteres', series: 3, repeticoes: '12-15', descanso: 60, carga: '' },
+        { nome: 'Encolhimento de ombros com a barra ou kettlebell', icone: 'barra', equipamento: 'Barra/Kettlebell', series: 3, repeticoes: '15', descanso: 60, carga: '' },
+        { nome: 'Rosca concentrada ou rosca inversa', icone: 'halter', equipamento: 'Halter/Barra', series: 3, repeticoes: '12', descanso: 60, carga: '' }
       ]
     }
   ]
