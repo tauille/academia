@@ -1,14 +1,15 @@
 /* ==========================================================================
-   itrainer — Lógica do app
+   itrainer — Lógica do app mobile
    1. Estado e dados
-   2. Navegação entre telas
-   3. Tela Início (anel de progresso)
+   2. Navegação (com transição)
+   3. Tela Início
    4. Tela Treinos (séries + timers)
    5. Tela Progresso
    6. Tela Nutrição
    7. Tela Perfil
    8. Tela Gerenciar
-   9. Inicialização
+   9. Toast + vibração
+   10. Inicialização
    ========================================================================== */
 
 // ---------- 1. ESTADO E DADOS ----------
@@ -24,10 +25,7 @@ const OBJETIVOS = {
 let estado = { concluidos: {}, historico: {}, cargas: {} };
 let treinos = null;
 
-// Retorna o SVG do ícone pelo nome; fallback para halteres
-function iconeSvg(nome) {
-  return ICONES[nome] || ICONES.halteres;
-}
+function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 
 function treinosAtuais() {
   if (treinos) return treinos;
@@ -36,55 +34,56 @@ function treinosAtuais() {
   if (!treinos) treinos = CONFIG.treinos;
   return treinos;
 }
-
 function salvarTreinos() { localStorage.setItem('itrainer-treinos', JSON.stringify(treinos)); }
-
-function carregarEstado() {
-  try {
-    const salvo = localStorage.getItem('itrainer-estado');
-    if (salvo) estado = JSON.parse(saldo);
-  } catch (e) { /* ignora */ }
-}
-
+function carregarEstado() { try { const s = localStorage.getItem('itrainer-estado'); if (s) estado = JSON.parse(s); } catch (e) {} }
 function salvarEstado() { localStorage.setItem('itrainer-estado', JSON.stringify(estado)); }
-
-function perfilAtual() {
-  try {
-    const p = JSON.parse(localStorage.getItem('itrainer-perfil'));
-    if (p) return Object.assign({}, CONFIG.perfil, p);
-  } catch (e) { /* ignora */ }
-  return Object.assign({}, CONFIG.perfil);
-}
-
+function perfilAtual() { try { const p = JSON.parse(localStorage.getItem('itrainer-perfil')); if (p) return Object.assign({}, CONFIG.perfil, p); } catch (e) {} return Object.assign({}, CONFIG.perfil); }
 function salvarPerfil(p) { localStorage.setItem('itrainer-perfil', JSON.stringify(p)); }
-
 function hoje() { return new Date().toISOString().split('T')[0]; }
 function diaAtual() { return DIAS[new Date().getDay()]; }
 
-// Converte "45s", "3 min", "10 min" em segundos. Retorna 0 se não for tempo.
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
   const t = String(texto).toLowerCase();
   if (!/\d/.test(t)) return 0;
-  if (t.includes('min')) {
-    const m = t.match(/([\d.,]+)\s*min/);
-    return m ? Math.round(parseFloat(m[1].replace(',', '.')) * 60) : 0;
-  }
-  if (t.includes('seg') || /(\d)\s*s\b/.test(t)) {
-    const s = t.match(/([\d.,]+)\s*(seg|s)/);
-    return s ? Math.round(parseFloat(s[1].replace(',', '.'))) : 0;
-  }
+  if (t.includes('min')) { const m = t.match(/([\d.,]+)\s*min/); return m ? Math.round(parseFloat(m[1].replace(',', '.')) * 60) : 0; }
+  if (t.includes('seg') || /(\d)\s*s\b/.test(t)) { const s = t.match(/([\d.,]+)\s*(seg|s)/); return s ? Math.round(parseFloat(s[1].replace(',', '.'))) : 0; }
   return 0;
 }
 
-// ---------- 2. NAVEGAÇÃO ----------
-function navegar(viewId) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + viewId).classList.add('active');
+// ---------- 9. TOAST + VIBRAÇÃO (feedback de app) ----------
+let toastTimer = null;
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('mostrar');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('mostrar'), 2200);
+}
+function vibrar(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
 
-  document.querySelectorAll('.nav-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.view === viewId);
-  });
+// ---------- 2. NAVEGAÇÃO (com transição) ----------
+function navegar(viewId) {
+  const atual = document.querySelector('.view.active');
+  const proxima = document.getElementById('view-' + viewId);
+
+  if (atual && atual.id === proxima.id) return;
+
+  // Anima a saída da tela atual
+  if (atual) {
+    atual.style.animation = 'viewOut 0.18s ease forwards';
+    setTimeout(() => {
+      atual.classList.remove('active');
+      atual.style.animation = '';
+      proxima.classList.add('active');
+      document.getElementById('appMain').scrollTop = 0;
+    }, 150);
+  } else {
+    proxima.classList.add('active');
+  }
+
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
+  vibrar(8);
 
   if (viewId === 'inicio') renderInicio();
   if (viewId === 'treinos') renderTreinos(diaAtual());
@@ -108,30 +107,19 @@ function renderInicio() {
   let saudacao = 'Boa noite';
   if (hora < 12) saudacao = 'Bom dia';
   else if (hora < 18) saudacao = 'Boa tarde';
-
   const nome = (perfil.nome || '').trim();
   document.getElementById('saudacao').textContent = nome ? `${saudacao}, ${nome}!` : `${saudacao}!`;
 
-  const chip = document.getElementById('chipObjetivo');
-  chip.textContent = OBJETIVOS[perfil.objetivo] || OBJETIVOS.hipertrofia;
+  document.getElementById('chipObjetivo').textContent = OBJETIVOS[perfil.objetivo] || OBJETIVOS.hipertrofia;
+  document.getElementById('headerDay').textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  document.getElementById('headerDay').textContent =
-    new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-
-  const frases = [
-    'Hoje é dia de evoluir. Bora!',
-    'Disciplina hoje, resultado amanhã.',
-    'Seu corpo agradece cada repetição.',
-    'Um treino de cada vez.'
-  ];
+  const frases = ['Hoje é dia de evoluir. Bora!', 'Disciplina hoje, resultado amanhã.', 'Seu corpo agradece cada repetição.', 'Um treino de cada vez.'];
   document.getElementById('fraseDia').textContent = frases[Math.floor(Math.random() * frases.length)];
 
   const card = document.getElementById('cardHoje');
   const concluidos = estado.concluidos[dia] || {};
   const total = (treino.exercicios || []).length;
-  const feitos = treino.exercicios.filter((ex, i) =>
-    (concluidos[i] || []).filter(Boolean).length === ex.series
-  ).length;
+  const feitos = treino.exercicios.filter((ex, i) => (concluidos[i] || []).filter(Boolean).length === ex.series).length;
   const pct = total ? Math.round((feitos / total) * 100) : 0;
   const treinoConcluido = total > 0 && feitos === total;
   const C = 2 * Math.PI * 52;
@@ -143,16 +131,12 @@ function renderInicio() {
         <div class="card-topo">
           <div class="card-titulo">
             <span class="treino-emoji">${treino.emoji}</span>
-            <div>
-              <h3>${treino.titulo}</h3>
-              <span class="dia-tag">${DIAS_LABEL[dia]}</span>
-            </div>
+            <div><h3>${treino.titulo}</h3><span class="dia-tag">${DIAS_LABEL[dia]}</span></div>
           </div>
         </div>
         <div class="progresso-texto">Hoje é dia de descanso. Recuperação também é treino! 🧘</div>
         <button class="btn btn-outline" data-view="treinos" style="width:100%;margin-top:1rem;">Ver treinos da semana</button>
-      </div>
-    `;
+      </div>`;
     card.querySelector('button').addEventListener('click', () => navegar('treinos'));
   } else {
     card.innerHTML = `
@@ -160,10 +144,7 @@ function renderInicio() {
         <div class="card-topo">
           <div class="card-titulo">
             <span class="treino-emoji">${treino.emoji}</span>
-            <div>
-              <h3>${treino.titulo}</h3>
-              <span class="dia-tag">${DIAS_LABEL[dia]}</span>
-            </div>
+            <div><h3>${treino.titulo}</h3><span class="dia-tag">${DIAS_LABEL[dia]}</span></div>
           </div>
         </div>
         <div class="card-corpo">
@@ -172,10 +153,7 @@ function renderInicio() {
               <circle class="ring-bg" cx="60" cy="60" r="52"/>
               <circle class="ring-fill" cx="60" cy="60" r="52" stroke-dasharray="${C}" stroke-dashoffset="${offset}"/>
             </svg>
-            <div class="ring-texto">
-              <strong>${pct}%</strong>
-              <span>concluído</span>
-            </div>
+            <div class="ring-texto"><strong>${pct}%</strong><span>concluído</span></div>
           </div>
           <div class="card-info">
             <p class="progresso-texto"><strong>${feitos}</strong> de ${total} exercícios concluídos</p>
@@ -184,28 +162,15 @@ function renderInicio() {
             </button>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
     card.querySelector('button').addEventListener('click', () => navegar('treinos'));
   }
 
-  const semana = Object.keys(estado.historico).filter(data => {
-    const diff = (new Date() - new Date(data)) / 86400000;
-    return diff < 7 && diff >= 0;
-  }).length;
-
+  const semana = Object.keys(estado.historico).filter(data => { const diff = (new Date() - new Date(data)) / 86400000; return diff < 7 && diff >= 0; }).length;
   let sequencia = 0;
-  for (let i = 0; i < 30; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    if (estado.historico[d.toISOString().split('T')[0]]) sequencia++;
-    else break;
-  }
-
+  for (let i = 0; i < 30; i++) { const d = new Date(); d.setDate(d.getDate() - i); if (estado.historico[d.toISOString().split('T')[0]]) sequencia++; else break; }
   let totalExercicios = 0;
-  Object.values(estado.concluidos).forEach(arr => {
-    Object.values(arr).forEach(series => { totalExercicios += series.filter(Boolean).length; });
-  });
+  Object.values(estado.concluidos).forEach(arr => Object.values(arr).forEach(series => { totalExercicios += series.filter(Boolean).length; }));
 
   document.getElementById('statSemana').textContent = semana;
   document.getElementById('statSequencia').textContent = sequencia;
@@ -215,15 +180,8 @@ function renderInicio() {
 // ---------- 4. TELA TREINOS ----------
 function renderTreinos(diaSelecionado) {
   const tabs = document.getElementById('diasTabs');
-  tabs.innerHTML = DIAS.map(dia => `
-    <button class="dia-tab ${dia === diaSelecionado ? 'active' : ''}" data-dia="${dia}">
-      ${DIAS_LABEL[dia]}
-    </button>
-  `).join('');
-
-  tabs.querySelectorAll('.dia-tab').forEach(tab => {
-    tab.addEventListener('click', () => renderTreinos(tab.dataset.dia));
-  });
+  tabs.innerHTML = DIAS.map(dia => `<button class="dia-tab ${dia === diaSelecionado ? 'active' : ''}" data-dia="${dia}">${DIAS_LABEL[dia]}</button>`).join('');
+  tabs.querySelectorAll('.dia-tab').forEach(tab => tab.addEventListener('click', () => { vibrar(6); renderTreinos(tab.dataset.dia); }));
 
   const treino = treinosAtuais()[diaSelecionado];
   const lista = document.getElementById('listaExercicios');
@@ -232,12 +190,8 @@ function renderTreinos(diaSelecionado) {
     lista.innerHTML = `
       <div class="treino-cabecalho">
         <span class="treino-emoji">${(treino && treino.emoji) || '😴'}</span>
-        <div>
-          <h1>${(treino && treino.titulo) || 'Descanso'}</h1>
-          <p>Dia de descanso. Aproveite para recuperar! 🧘</p>
-        </div>
-      </div>
-    `;
+        <div><h1>${(treino && treino.titulo) || 'Descanso'}</h1><p>Dia de descanso. Aproveite para recuperar! 🧘</p></div>
+      </div>`;
     return;
   }
 
@@ -245,12 +199,8 @@ function renderTreinos(diaSelecionado) {
   lista.innerHTML = `
     <div class="treino-cabecalho">
       <span class="treino-emoji">${treino.emoji}</span>
-      <div>
-        <h1>${treino.titulo}</h1>
-        <p>Toque nas séries para marcar como concluídas.</p>
-      </div>
-    </div>
-  `;
+      <div><h1>${treino.titulo}</h1><p>Toque nas séries para marcar como concluídas.</p></div>
+    </div>`;
 
   treino.exercicios.forEach((ex, i) => {
     const seriesFeitas = (concluidos[i] || []).filter(Boolean).length;
@@ -279,17 +229,11 @@ function renderTreinos(diaSelecionado) {
       <div class="series">
         ${Array.from({ length: ex.series }, (_, s) => `
           <button class="serie ${(concluidos[i] || [])[s] ? 'concluida' : ''}" data-ex="${i}" data-serie="${s}">
-            <span class="serie-num">${s + 1}ª</span>
-            série
-          </button>
-        `).join('')}
-      </div>
-    `;
+            <span class="serie-num">${s + 1}ª</span> série
+          </button>`).join('')}
+      </div>`;
 
-    card.querySelectorAll('.serie').forEach(btn => {
-      btn.addEventListener('click', () => marcarSerie(diaSelecionado, i, Number(btn.dataset.serie), ex));
-    });
-
+    card.querySelectorAll('.serie').forEach(btn => btn.addEventListener('click', () => marcarSerie(diaSelecionado, i, Number(btn.dataset.serie), ex)));
     lista.appendChild(card);
   });
 }
@@ -302,19 +246,18 @@ function marcarSerie(dia, exIndex, serieIndex, ex) {
   const marcou = !arr[serieIndex];
   arr[serieIndex] = marcou;
   salvarEstado();
+  vibrar(marcou ? 15 : 8);
 
   if (marcou) {
     const tempo = tempoEmSegundos(ex.repeticoes);
-    if (tempo > 0) {
-      // Exercício por tempo: cronometra a duração do exercício
-      abrirTimer(tempo, 'Tempo do exercício', ex.nome);
-    } else if (ex.descanso > 0) {
-      // Exercício normal: cronometra o descanso
-      abrirTimer(ex.descanso, 'Descanso', ex.nome);
-    }
+    if (tempo > 0) abrirTimer(tempo, 'Tempo do exercício', ex.nome);
+    else if (ex.descanso > 0) abrirTimer(ex.descanso, 'Descanso', ex.nome);
   }
 
-  if (arr.filter(Boolean).length === ex.series) registrarCarga(dia, exIndex);
+  if (arr.filter(Boolean).length === ex.series) {
+    registrarCarga(dia, exIndex);
+    mostrarToast('✅ Exercício concluído!');
+  }
 
   renderTreinos(dia);
   registrarHistorico(dia);
@@ -324,15 +267,12 @@ function registrarCarga(dia, exIndex) {
   const ex = treinosAtuais()[dia].exercicios[exIndex];
   const carga = Number(ex.carga) || 0;
   if (carga <= 0) return;
-
   if (!estado.cargas) estado.cargas = {};
   const chave = dia + '-' + exIndex;
   if (!estado.cargas[chave]) estado.cargas[chave] = [];
-
   const historico = estado.cargas[chave];
   const ultimo = historico[historico.length - 1];
   if (ultimo && ultimo.data === hoje()) return;
-
   historico.push({ data: hoje(), carga });
   salvarEstado();
 }
@@ -340,16 +280,11 @@ function registrarCarga(dia, exIndex) {
 function registrarHistorico(dia) {
   const treino = treinosAtuais()[dia];
   const concluidos = estado.concluidos[dia] || {};
-  const completo = treino.exercicios.every((ex, i) =>
-    (concluidos[i] || []).filter(Boolean).length === ex.series
-  );
-  if (completo) {
-    estado.historico[hoje()] = dia;
-    salvarEstado();
-  }
+  const completo = treino.exercicios.every((ex, i) => (concluidos[i] || []).filter(Boolean).length === ex.series);
+  if (completo) { estado.historico[hoje()] = dia; salvarEstado(); }
 }
 
-// ---------- TIMER (TEMPO DE EXERCÍCIO E DESCANSO) ----------
+// ---------- TIMER ----------
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -373,6 +308,7 @@ function abrirTimer(segundos, titulo, nomeExercicio) {
   ring.style.strokeDashoffset = 0;
 
   modal.classList.add('aberto');
+  vibrar(20);
 
   clearInterval(timerInterval);
   timerInterval = setInterval(() => {
@@ -383,6 +319,8 @@ function abrirTimer(segundos, titulo, nomeExercicio) {
     if (timerRestante <= 0) {
       clearInterval(timerInterval);
       modal.classList.remove('aberto');
+      vibrar([30, 60, 30]);
+      mostrarToast('⏰ Tempo encerrado!');
     }
   }, 1000);
 }
@@ -391,10 +329,10 @@ document.getElementById('timerFechar').addEventListener('click', () => {
   clearInterval(timerInterval);
   document.getElementById('modalTimer').classList.remove('aberto');
 });
-
 document.getElementById('timerPausar').addEventListener('click', () => {
   timerRodando = !timerRodando;
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
+  vibrar(6);
 });
 
 // ---------- 5. TELA PROGRESSO ----------
@@ -405,11 +343,7 @@ function renderProgresso() {
   const meta = perfil.diasMeta || 4;
 
   const dias = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dias.push(d);
-  }
+  for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); dias.push(d); }
 
   barra.innerHTML = dias.map(d => {
     const chave = d.toISOString().split('T')[0];
@@ -417,17 +351,9 @@ function renderProgresso() {
     const treino = treinosAtuais()[dia];
     const concluidos = estado.concluidos[dia] || {};
     const total = (treino.exercicios || []).length;
-    const feitos = treino.exercicios.filter((ex, i) =>
-      (concluidos[i] || []).filter(Boolean).length === ex.series
-    ).length;
+    const feitos = treino.exercicios.filter((ex, i) => (concluidos[i] || []).filter(Boolean).length === ex.series).length;
     const pct = total ? (feitos / total) * 100 : 0;
-
-    return `
-      <div class="barra-dia">
-        <div class="barra ${pct > 0 ? 'preenchida' : ''}" style="height:${Math.max(pct, 4)}%"></div>
-        <span>${DIAS_LABEL[dia]}</span>
-      </div>
-    `;
+    return `<div class="barra-dia"><div class="barra ${pct > 0 ? 'preenchida' : ''}" style="height:${Math.max(pct, 4)}%"></div><span>${DIAS_LABEL[dia]}</span></div>`;
   }).join('');
 
   const totalSemana = dias.filter(d => estado.historico[d.toISOString().split('T')[0]]).length;
@@ -436,21 +362,95 @@ function renderProgresso() {
     <ul class="resumo-lista">
       <li><span>Treinos concluídos</span><span class="ok">${totalSemana} de 7</span></li>
       <li><span>Meta semanal (${meta} treinos)</span><span class="${totalSemana >= meta ? 'ok' : 'pendente'}">${totalSemana >= meta ? 'Meta atingida 🎉' : 'Faltam ' + (meta - totalSemana)}</span></li>
-    </ul>
-  `;
-
+    </ul>`;
   renderEvolucao();
 }
 
 function renderEvolucao() {
   const container = document.getElementById('evolucaoCargas');
   if (!container) return;
-
   const t = treinosAtuais();
   const itens = [];
-
   Object.keys(estado.cargas || {}).forEach(chave => {
     const partes = chave.split('-');
     const dia = partes[0];
     const exIndex = Number(partes[1]);
-    const ex = t[dia] && t[dia].exercicios
+    const ex = t[dia] && t[dia].exercicios[exIndex];
+    if (!ex) return;
+    const hist = estado.cargas[chave];
+    const primeira = hist[0].carga;
+    const ultima = hist[hist.length - 1].carga;
+    const variacao = ultima - primeira;
+    itens.push({ nome: ex.nome, icone: ex.icone, dia, primeira, ultima, variacao, qtd: hist.length });
+  });
+  itens.sort((a, b) => b.variacao - a.variacao);
+  container.innerHTML = itens.length ? itens.map(item => `
+    <div class="evolucao-item">
+      <div><strong>${item.icone || '🏋️'} ${item.nome}</strong><span>${DIAS_LABEL[item.dia]} · ${item.qtd} registro(s)</span></div>
+      <span class="evolucao-valor ${item.variacao > 0 ? 'positiva' : item.variacao < 0 ? 'negativa' : ''}">
+        ${item.primeira}kg → ${item.ultima}kg ${item.variacao > 0 ? '▲' : item.variacao < 0 ? '▼' : '—'}
+      </span>
+    </div>`).join('') : '<p class="sem-dados">Defina a carga dos exercícios na tela Gerenciar e conclua séries para acompanhar sua evolução aqui.</p>';
+}
+
+// ---------- 6. TELA NUTRIÇÃO ----------
+function renderNutricao() {
+  const n = CONFIG.nutricao;
+  document.getElementById('nutricaoCorpo').innerHTML = `
+    <div class="nutricao-card">
+      <span class="kicker">🥣 ${n.pre.titulo}</span>
+      <p class="nutricao-objetivo">🎯 ${n.pre.objetivo}</p>
+      <ul>${n.pre.opcoes.map(o => `<li>${o}</li>`).join('')}</ul>
+    </div>
+    <div class="nutricao-card">
+      <span class="kicker">🍗 ${n.pos.titulo}</span>
+      <p class="nutricao-objetivo">🎯 ${n.pos.objetivo}</p>
+      <ul>${n.pos.opcoes.map(o => `<li>${o}</li>`).join('')}</ul>
+    </div>`;
+}
+
+// ---------- 7. TELA PERFIL ----------
+function renderPerfil() {
+  const perfil = perfilAtual();
+  const corpo = document.getElementById('perfilCorpo');
+  corpo.innerHTML = `
+    <div class="section-titulo"><h2>Seu perfil</h2><p>Seus dados e metas de treino.</p></div>
+    <div class="perfil-form">
+      <label class="campo"><span>Nome</span><input type="text" id="pfNome" value="${perfil.nome}" placeholder="Como quer ser chamado(a)"></label>
+      <div class="perfil-linha">
+        <label class="campo"><span>Altura (cm)</span><input type="number" id="pfAltura" value="${perfil.altura}" placeholder="ex.: 173"></label>
+        <label class="campo"><span>Peso (kg)</span><input type="number" id="pfPeso" value="${perfil.peso}" placeholder="ex.: 61"></label>
+      </div>
+      <label class="campo"><span>Objetivo</span>
+        <select id="pfObjetivo">
+          <option value="hipertrofia" ${perfil.objetivo === 'hipertrofia' ? 'selected' : ''}>Hipertrofia</option>
+          <option value="emagrecimento" ${perfil.objetivo === 'emagrecimento' ? 'selected' : ''}>Emagrecimento</option>
+          <option value="condicionamento" ${perfil.objetivo === 'condicionamento' ? 'selected' : ''}>Condicionamento</option>
+          <option value="forca" ${perfil.objetivo === 'forca' ? 'selected' : ''}>Força</option>
+        </select>
+      </label>
+      <label class="campo"><span>Meta de treinos por semana</span><input type="number" id="pfDiasMeta" min="1" max="7" value="${perfil.diasMeta}"></label>
+      <button class="btn btn-primary" id="pfSalvar" style="width:100%;">Salvar perfil</button>
+    </div>`;
+
+  document.getElementById('pfSalvar').addEventListener('click', () => {
+    const p = {
+      nome: document.getElementById('pfNome').value.trim(),
+      altura: document.getElementById('pfAltura').value,
+      peso: document.getElementById('pfPeso').value,
+      objetivo: document.getElementById('pfObjetivo').value,
+      diasMeta: Number(document.getElementById('pfDiasMeta').value) || 4
+    };
+    salvarPerfil(p);
+    vibrar(15);
+    mostrarToast('✅ Perfil salvo!');
+    renderInicio();
+  });
+}
+
+// ---------- 8. TELA GERENCIAR ----------
+function renderGerenciar() {
+  const lista = document.getElementById('listaGerenciar');
+  const t = treinosAtuais();
+  lista.innerHTML = DIAS.map(dia => {
+    const treino = t[dia] || { titulo: 'Descanso', emoji: '😴', exercicios

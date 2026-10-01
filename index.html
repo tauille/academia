@@ -2,10 +2,15 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="itrainer - Executor de treinos para academia: séries, timers e progresso.">
+  <!-- viewport-fit=cover: usa a área atrás do notch/barra de status -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+  <meta name="description" content="itrainer - App de treinos para academia: séries, timers e progresso.">
   <meta name="theme-color" content="#0b0b0e">
-  <title>itrainer - Treinos</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="itrainer">
+  <title>itrainer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,7 +18,7 @@
 </head>
 <body>
 
-  <!-- CABEÇALHO -->
+  <!-- SHELL: cabeçalho fixo -->
   <header class="app-header">
     <div class="header-inner">
       <button class="logo" data-view="inicio">i<span>trainer</span></button>
@@ -21,10 +26,4 @@
     </div>
   </header>
 
-  <main class="app-main">
-
-    <!-- ===== TELA INÍCIO ===== -->
-    <section class="view active" id="view-inicio">
-      <div class="container">
-        <div class="welcome">
-          <span class="welcome-chip"
+  <!-- SHELL: área de conteúdo rolável (única, com scroll
