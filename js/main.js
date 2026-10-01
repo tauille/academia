@@ -1,16 +1,4 @@
-/* ==========================================================================
-   itrainer — Lógica do app (CRUD + execução + timer com som + histórico)
-   1. Armazenamento
-   2. Navegação
-   3. Listar treinos
-   4. Executar treino (séries + timer)
-   5. Gerenciar (CRUD)
-   6. Histórico
-   7. Som (desbloqueio no toque + bipes)
-   8. Timer (bip nos 10s finais + execução/descanso em sequência)
-   9. Inicialização
-   ========================================================================== */
-
+/* itrainer — Lógica completa (CRUD + execução + timer com som + histórico) */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
@@ -23,16 +11,13 @@ let historico = [];
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 function hoje() { return new Date().toISOString().split('T')[0]; }
 
-// ---------- 1. ARMAZENAMENTO ----------
+/* ---------- 1. ARMAZENAMENTO ---------- */
 function carregarTreinos() {
   try {
     const raw = localStorage.getItem(STORAGE_TREINOS);
     if (raw) {
-      const dados = JSON.parse(raw);
-      if (Array.isArray(dados) && dados.every(t => t && t.id && Array.isArray(t.exercicios))) {
-        treinos = dados;
-        return;
-      }
+      const d = JSON.parse(raw);
+      if (Array.isArray(d) && d.every(t => t && t.id && Array.isArray(t.exercicios))) { treinos = d; return; }
     }
   } catch (e) {}
   treinos = JSON.parse(JSON.stringify(CONFIG.treinos));
@@ -44,8 +29,8 @@ function carregarEstado() {
   try {
     const raw = localStorage.getItem(STORAGE_ESTADO);
     if (raw) {
-      const dados = JSON.parse(raw);
-      if (dados && typeof dados === 'object' && !Array.isArray(dados)) { estado = dados; return; }
+      const d = JSON.parse(raw);
+      if (d && typeof d === 'object' && !Array.isArray(d)) { estado = d; return; }
     }
   } catch (e) {}
   estado = {};
@@ -55,10 +40,7 @@ function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(es
 function carregarHistorico() {
   try {
     const raw = localStorage.getItem(STORAGE_HISTORICO);
-    if (raw) {
-      const dados = JSON.parse(raw);
-      if (Array.isArray(dados)) { historico = dados; return; }
-    }
+    if (raw) { const d = JSON.parse(raw); if (Array.isArray(d)) { historico = d; return; } }
   } catch (e) {}
   historico = [];
 }
@@ -72,7 +54,7 @@ function mostrarToast(msg) {
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
 
-// ---------- 2. NAVEGAÇÃO ----------
+/* ---------- 2. NAVEGAÇÃO ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewId).classList.add('active');
@@ -83,7 +65,7 @@ function navegar(viewId) {
   if (viewId === 'gerenciar') renderGerenciar();
 }
 
-// ---------- 3. LISTAR TREINOS ----------
+/* ---------- 3. LISTAR TREINOS ---------- */
 function renderTreinos() {
   const lista = document.getElementById('listaTreinos');
   if (treinoAtivo) { renderExecucao(); return; }
@@ -115,15 +97,14 @@ function renderTreinos() {
   });
 }
 
-// ---------- 4. EXECUTAR TREINO ----------
-// Retorna o tempo de execução em segundos (0 = exercício por repetição)
+/* ---------- 4. EXECUTAR TREINO ---------- */
 function tempoDoExercicio(ex) {
   if (!ex) return 0;
   if (ex.tipo === 'tempo') {
     const n = parseFloat(String(ex.repeticoes).replace(',', '.'));
     return isNaN(n) || n <= 0 ? 0 : Math.round(n);
   }
-  return tempoEmSegundos(ex.repeticoes); // compatível com dados antigos ("45s", "3 min")
+  return tempoEmSegundos(ex.repeticoes);
 }
 
 function renderExecucao() {
@@ -208,7 +189,7 @@ function marcarSerie(exIndex, serieIndex) {
   salvarEstado();
 
   if (marcou) {
-    desbloquearAudio(); // áudio criado/retomado DENTRO do gesto do toque
+    desbloquearAudio();
     const tempo = tempoDoExercicio(exer);
     if (tempo > 0) {
       abrirTimer(tempo, 'Tempo de execução', exer.nome, () => {
@@ -241,7 +222,7 @@ function concluirTreino() {
   renderExecucao();
 }
 
-// ---------- 5. GERENCIAR (CRUD) ----------
+/* ---------- 5. GERENCIAR (CRUD) ---------- */
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
   if (!treinos.length) {
@@ -276,7 +257,7 @@ function excluirTreino(id) {
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
 
-// ---------- EDITOR (com seletor Repetições / Tempo) ----------
+/* ---------- EDITOR (seletor Repetições / Tempo) ---------- */
 function abrirEditor(treinoId) {
   const modal = document.getElementById('modalEditor');
   const corpo = document.getElementById('editorCorpo');
@@ -399,7 +380,7 @@ function abrirEditor(treinoId) {
   modal.classList.add('aberto');
 }
 
-// ---------- 6. HISTÓRICO ----------
+/* ---------- 6. HISTÓRICO ---------- */
 function registrarHistorico(t) {
   if (!t || !t.exercicios.length) return;
   const data = hoje();
@@ -456,10 +437,9 @@ function renderHistorico() {
   }).join('');
 }
 
-// ---------- 7. SOM (Web Audio API — sem arquivo de áudio) ----------
+/* ---------- 7. SOM (Web Audio API) ---------- */
 let audioCtx = null;
 
-// Cria/retoma o áudio DENTRO de um gesto do usuário (exigência de autoplay)
 function desbloquearAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -489,17 +469,17 @@ function beep(freq, dur, vol, atraso) {
 function tocarSom(tipo) {
   if (!audioCtx) return;
   if (tipo === 'tick') {
-    beep(1200, 0.14, 0.35);          // bip curto a cada segundo nos 10s finais
+    beep(1200, 0.14, 0.35);
   } else if (tipo === 'exec') {
-    beep(880, 0.35, 0.45);           // fim da execução: bip longo duplo
+    beep(880, 0.35, 0.45);
     beep(880, 0.35, 0.45, 0.45);
   } else if (tipo === 'descanso') {
-    beep(660, 0.35, 0.45);           // fim do descanso: bip longo duplo
+    beep(660, 0.35, 0.45);
     beep(660, 0.35, 0.45, 0.45);
   }
 }
 
-// ---------- 8. TIMER (contagem por tempo real + bipes) ----------
+/* ---------- 8. TIMER (contagem por tempo real + bipes) ---------- */
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -507,6 +487,7 @@ let timerRodando = false;
 let timerEnd = 0;
 let timerFinalTipo = 'descanso';
 let ultimoTick = -1;
+let aoTerminarCallback = null;
 
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
@@ -535,6 +516,7 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   timerEnd = Date.now() + segundos * 1000;
   timerFinalTipo = titulo === 'Tempo de execução' ? 'exec' : 'descanso';
   ultimoTick = -1;
+  aoTerminarCallback = (typeof aoTerminar === 'function') ? aoTerminar : null;
 
   document.getElementById('timerTitulo').textContent = titulo;
   document.getElementById('timerExercicio').textContent = nomeExercicio || '';
@@ -559,7 +541,6 @@ function stepTimer() {
   const C = 2 * Math.PI * 52;
   ring.style.strokeDashoffset = C * (1 - restante / timerTotal);
 
-  // Bip a cada segundo nos 10s finais (uma vez por segundo contado)
   if (restante <= 10 && restante > 0 && restante !== ultimoTick) {
     ultimoTick = restante;
     tocarSom('tick');
@@ -568,12 +549,30 @@ function stepTimer() {
   if (restante <= 0) {
     clearInterval(timerInterval);
     document.getElementById('modalTimer').classList.remove('aberto');
-    tocarSom(timerFinalTipo);        // bip longo no fim
-    if (arguments.length) { /* nada */ }
+    tocarSom(timerFinalTipo);
+    const cb = aoTerminarCallback;
+    aoTerminarCallback = null;
+    if (cb) cb();
   }
 }
 
-// aoTerminar é chamado separadamente sem depender de arguments
-let aoTerminarCallback = null;
+document.getElementById('timerFechar').addEventListener('click', () => {
+  clearInterval(timerInterval);
+  document.getElementById('modalTimer').classList.remove('aberto');
+});
 
-// (abrirTimer acima já existe; aqui conectamos o callback
+document.getElementById('timerPausar').addEventListener('click', () => {
+  timerRodando = !timerRodando;
+  document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
+});
+
+/* ---------- 9. INICIALIZAÇÃO ---------- */
+document.querySelectorAll('[data-view]').forEach(el => {
+  el.addEventListener('click', () => navegar(el.dataset.view));
+});
+document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
+
+carregarTreinos();
+carregarEstado();
+carregarHistorico();
+navegar('treinos');
