@@ -10,7 +10,7 @@ const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
 
 const DB_NOME = 'itrainer-db';
-const DB_VERSAO = 1;
+const DB_VERSAO = 2;
 
 let treinos = null;
 let estado = {};
