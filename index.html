@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0e120a">
+  <meta name="theme-color" content="#0b0b0e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,52 +22,85 @@
 <body>
 
   <header class="app-header">
-    <h1>iTrainer</h1>
+    <div class="header-inner">
+      <div class="logo">i<span>Trainer</span></div>
+    </div>
   </header>
 
-  <main class="app-main">
-    <section id="view-treinos" class="view"></section>
-    <section id="view-historico" class="view"></section>
-    <section id="view-gerenciar" class="view"></section>
-    <section id="view-nutricao" class="view"></section>
+  <main class="app-main" id="appMain">
+    <div class="container">
+      <section id="view-treinos" class="view">
+        <div id="listaTreinos"></div>
+      </section>
+
+      <section id="view-historico" class="view">
+        <div id="listaHistorico"></div>
+      </section>
+
+      <section id="view-gerenciar" class="view">
+        <div class="section-titulo">
+          <h2>Gerenciar</h2>
+          <p>Seus treinos</p>
+        </div>
+        <button class="btn btn-primary btn-bloco" id="btnNovoTreino">+ Novo treino</button>
+        <div id="listaGerenciar"></div>
+      </section>
+
+      <section id="view-nutricao" class="view"></section>
+    </div>
   </main>
 
-  <nav id="barra-tab" class="barra-tab">
-    <button class="tab" data-view="treinos" type="button">Treinos</button>
-    <button class="tab" data-view="historico" type="button">Histórico</button>
-    <button class="tab" data-view="gerenciar" type="button">Gerenciar</button>
-    <button id="tab-nutricao" class="tab" data-view="nutricao" type="button">Nutrição</button>
+  <nav class="bottom-nav">
+    <button class="nav-item" data-view="treinos" type="button">
+      <span class="nav-icone">🏋️</span>Treinos
+    </button>
+    <button class="nav-item" data-view="historico" type="button">
+      <span class="nav-icone">📊</span>Histórico
+    </button>
+    <button class="nav-item" data-view="gerenciar" type="button">
+      <span class="nav-icone">⚙️</span>Gerenciar
+    </button>
+    <button class="nav-item" data-view="nutricao" type="button">
+      <span class="nav-icone">🥗</span>Nutrição
+    </button>
   </nav>
+
+  <!-- Modal: editor de treino -->
+  <div class="modal" id="modalEditor">
+    <div class="modal-sheet modal-editor">
+      <div id="editorCorpo"></div>
+    </div>
+  </div>
+
+  <!-- Modal: timer -->
+  <div class="modal" id="modalTimer">
+    <div class="modal-sheet">
+      <span class="timer-titulo" id="timerTitulo">Descanso</span>
+      <span class="timer-exercicio" id="timerExercicio"></span>
+      <div class="timer-ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fill" id="timerRing" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="timer-numero" id="timerNumero">0</div>
+      </div>
+      <div class="timer-botoes">
+        <button class="btn btn-outline" id="timerPausar">Pausar</button>
+        <button class="btn btn-primary" id="timerFechar">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
 
   <script src="js/config.js?v=4"></script>
   <script src="js/main.js?v=4"></script>
   <script src="js/nutricao.js?v=4"></script>
   <script>
-    // Service worker — cache offline
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
     }
-
-    // Integração da 4ª aba (Nutrição)
-    // O main.js gerencia Treinos/Histórico/Gerenciar; este bloco apenas
-    // garante que a view de nutrição apareça e inicialize ao tocar na aba.
-    (function () {
-      var botao = document.getElementById('tab-nutricao');
-      if (!botao) return;
-
-      botao.addEventListener('click', function () {
-        var alvo = document.getElementById('view-nutricao');
-        if (alvo) {
-          document.querySelectorAll('.view').forEach(function (s) {
-            s.classList.remove('ativa');
-          });
-          alvo.classList.add('ativa');
-        }
-        if (window.Nutricao) {
-          window.Nutricao.init();
-        }
-      });
-    })();
   </script>
 </body>
 </html>

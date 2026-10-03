@@ -1,7 +1,6 @@
 /* ==========================================================================
    itrainer — App de treino · versão com histórico
    ========================================================================== */
-
 :root {
   --bg: #0b0b0e;
   --surface: #141418;
@@ -24,11 +23,8 @@
   --header-h: 60px;
   --nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
 }
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
 html, body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-
 body {
   background: var(--bg);
   color: var(--text);
@@ -40,14 +36,10 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
-
 input, textarea { -webkit-user-select: text; user-select: text; }
-
 button { font-family: var(--font-body); cursor: pointer; border: none; background: none; color: inherit; }
 input, select { font-family: var(--font-body); }
-
 .container { width: 100%; padding: 0 1.1rem; max-width: 720px; margin: 0 auto; }
-
 /* ---------- SHELL ---------- */
 .app-header {
   position: fixed; top: 0; left: 0; right: 0;
@@ -63,7 +55,6 @@ input, select { font-family: var(--font-body); }
 .logo { font-family: var(--font-display); font-size: 1.8rem; letter-spacing: 2px; color: var(--text); text-transform: uppercase; }
 .logo:active { opacity: 0.7; }
 .logo span { background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-
 .app-main {
   position: fixed;
   top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
@@ -74,7 +65,6 @@ input, select { font-family: var(--font-body); }
   overscroll-behavior-y: contain;
   padding-bottom: 1.5rem;
 }
-
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: var(--nav-h);
@@ -101,18 +91,14 @@ input, select { font-family: var(--font-body); }
   transform: translateX(-50%); width: 34px; height: 3px;
   border-radius: 0 0 4px 4px; background: var(--accent-grad);
 }
-
 /* ---------- TRANSIÇÃO ---------- */
 .view { display: none; }
 .view.active { display: block; animation: viewIn 0.25s ease; }
 @keyframes viewIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-
 .section-titulo { margin: 1.3rem 0 1.1rem; }
 .section-titulo h2 { font-family: var(--font-display); font-size: 2rem; letter-spacing: 1px; text-transform: uppercase; }
 .section-titulo p { color: var(--muted); font-size: 0.88rem; }
-
 .vazio { text-align: center; color: var(--muted); padding: 2.5rem 1rem; font-size: 0.95rem; line-height: 1.6; }
-
 /* ---------- LISTA DE TREINOS ---------- */
 .treino-card {
   background: var(--surface);
@@ -129,13 +115,11 @@ input, select { font-family: var(--font-body); }
 .treino-meta { font-size: 0.8rem; color: var(--muted); }
 .treino-progresso { height: 6px; background: var(--surface-3); border-radius: 6px; overflow: hidden; margin-top: 0.8rem; }
 .treino-progresso .fill { height: 100%; background: var(--accent-grad); border-radius: 6px; transition: width 0.4s ease; }
-
 /* ---------- EXECUÇÃO ---------- */
 .exec-cabecalho { display: flex; align-items: flex-start; gap: 0.6rem; margin: 1rem 0 1.2rem; }
 .exec-cabecalho .voltar { font-size: 1.5rem; color: var(--muted); padding: 0.2rem; line-height: 1; }
 .exec-cabecalho h1 { font-family: var(--font-display); font-size: 1.9rem; letter-spacing: 1px; text-transform: uppercase; line-height: 1.05; }
 .exec-cabecalho > div { flex: 1; }
-
 .exercicio {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -161,7 +145,6 @@ input, select { font-family: var(--font-body); }
   font-size: 0.7rem; font-weight: 600; color: var(--muted);
 }
 .chip strong { color: var(--accent); }
-
 .series { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 0.5rem; }
 .serie {
   background: var(--surface-2); border: 1px solid var(--border);
@@ -179,7 +162,6 @@ input, select { font-family: var(--font-body); }
   border-radius: 50%; font-size: 0.7rem; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
-
 /* ---------- GERENCIAR ---------- */
 .dia-gerenciar {
   background: var(--surface); border: 1px solid var(--border);
@@ -190,7 +172,6 @@ input, select { font-family: var(--font-body); }
 .dia-gerenciar-info strong { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dia-gerenciar-info span { font-size: 0.8rem; color: var(--muted); }
 .dia-gerenciar-acoes { display: flex; gap: 0.5rem; flex-shrink: 0; }
-
 /* ---------- HISTÓRICO ---------- */
 .hist-dia { margin-bottom: 1.4rem; }
 .hist-dia-cabecalho { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.6rem; }
@@ -204,7 +185,6 @@ input, select { font-family: var(--font-body); }
 .hist-item-topo strong { font-size: 0.95rem; color: var(--accent); }
 .hist-item-topo span { font-size: 0.78rem; color: var(--muted); }
 .hist-exercicios { font-size: 0.8rem; color: var(--muted); line-height: 1.55; }
-
 /* ---------- BOTÕES ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
@@ -218,7 +198,6 @@ input, select { font-family: var(--font-body); }
 .btn-danger { background: rgba(248, 113, 113, 0.12); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.3); }
 .btn-bloco { width: 100%; margin-top: 0.8rem; }
 .btn-pequeno { padding: 0.5rem 0.9rem; font-size: 0.78rem; min-height: 40px; }
-
 /* ---------- MODAL (bottom-sheet) ---------- */
 .modal {
   position: fixed; inset: 0; z-index: 200;
@@ -242,7 +221,6 @@ input, select { font-family: var(--font-body); }
   content: ''; display: block; width: 40px; height: 4px;
   background: var(--surface-3); border-radius: 4px; margin: 0 auto 1.1rem;
 }
-
 .timer-titulo { display: block; color: var(--accent); font-size: 0.82rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 0.25rem; }
 .timer-exercicio { display: block; color: var(--muted); font-size: 0.85rem; margin-bottom: 1.2rem; min-height: 1.2em; }
 .timer-ring-wrap { position: relative; width: 150px; height: 150px; margin: 0 auto 1.3rem; }
@@ -252,7 +230,6 @@ input, select { font-family: var(--font-body); }
 .timer-numero { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 3.6rem; color: var(--text); }
 .timer-botoes { display: flex; gap: 0.8rem; }
 .timer-botoes .btn { flex: 1; }
-
 /* ---------- EDITOR ---------- */
 .modal-editor { max-height: 82vh; overflow-y: auto; text-align: left; }
 .editor-cabecalho { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -265,7 +242,6 @@ input, select { font-family: var(--font-body); }
   font-size: 0.95rem; min-height: 48px;
 }
 .campo input:focus, .campo select:focus { outline: none; border-color: var(--accent); }
-
 .ed-exercicio { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.8rem; margin-bottom: 0.7rem; }
 .ed-nome { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0.6rem 0.8rem; font-size: 0.88rem; margin-bottom: 0.5rem; }
 .ed-dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem; }
@@ -281,7 +257,6 @@ input, select { font-family: var(--font-body); }
 .ed-remover { width: 100%; font-size: 0.75rem; }
 .editor-acoes { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
 .editor-acoes .btn { width: 100%; }
-
 /* ---------- TOAST ---------- */
 .toast {
   position: fixed; left: 50%; bottom: calc(var(--nav-h) + 16px);
@@ -296,3 +271,16 @@ input, select { font-family: var(--font-body); }
   max-width: 88%; text-align: center;
 }
 .toast.mostrar { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ==========================================================================
+   MÓDULO NUTRIÇÃO — apoio (o módulo usa estilos inline; estes são reforços)
+   ========================================================================== */
+/* 4ª aba: com 4 itens a barra continua distribuindo igualmente */
+.bottom-nav .nav-item { max-width: none; }
+/* Campos numéricos do módulo: sem setas nativas para visual mais limpo */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+/* Barra de rolagem discreta nas listas internas do módulo */
+.nut-scroll::-webkit-scrollbar { width: 6px; }
+.nut-scroll::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 6px; }
