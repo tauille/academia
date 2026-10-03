@@ -1,50 +1,129 @@
-/* itrainer — Lógica completa (CRUD + execução + timer com som + histórico) */
+/* ==========================================================================
+   itrainer — Lógica do app (CRUD + execução + timer com som + histórico)
+   v5: banco de dados IndexedDB + migração automática do localStorage
+       + editor com rótulos claros (séries / tempo / descanso)
+   ========================================================================== */
+
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
+
+const DB_NOME = 'itrainer-db';
+const DB_VERSAO = 1;
 
 let treinos = null;
 let estado = {};
 let treinoAtivo = null;
 let historico = [];
+let db = null;
 
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 function hoje() { return new Date().toISOString().split('T')[0]; }
 
-/* ---------- 1. ARMAZENAMENTO ---------- */
-function carregarTreinos() {
+/* ---------- 1. BANCO DE DADOS (IndexedDB) ---------- */
+function abrirBanco() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) { reject(new Error('sem-indexeddb')); return; }
+    try {
+      const req = indexedDB.open(DB_NOME, DB_VERSAO);
+      req.onupgradeneeded = (e) => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains('treinos')) d.createObjectStore('treinos');
+        if (!d.objectStoreNames.contains('estado')) d.createObjectStore('estado');
+        if (!d.objectStoreNames.contains('historico')) d.createObjectStore('historico');
+      };
+      req.onsuccess = () => { db = req.result; resolve(db); };
+      req.onerror = () => reject(req.error);
+    } catch (e) { reject(e); }
+  });
+}
+
+function dbPut(store, valor) {
+  return new Promise((resolve) => {
+    if (!db) { resolve(false); return; }
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(valor, 'dados');
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch (e) { resolve(false); }
+  });
+}
+
+function dbGet(store) {
+  return new Promise((resolve) => {
+    if (!db) { resolve(undefined); return; }
+    try {
+      const tx = db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).get('dados');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(undefined);
+    } catch (e) { resolve(undefined); }
+  });
+}
+
+// Copia os dados do localStorage para o banco apenas na primeira carga
+async function migrarSeNecessario() {
+  if (!db) return;
+  const jaTem = await dbGet('treinos');
+  if (jaTem !== undefined) return;
+
+  const t = lerTreinosDoLocalStorage();
+  const e = lerEstadoDoLocalStorage();
+  const h = lerHistoricoDoLocalStorage();
+
+  await dbPut('treinos', t || JSON.parse(JSON.stringify(CONFIG.treinos)));
+  await dbPut('estado', e);
+  await dbPut('historico', h);
+}
+
+/* ---------- 2. LEITURA LOCALSTORAGE (fallback) ---------- */
+function lerTreinosDoLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_TREINOS);
     if (raw) {
       const d = JSON.parse(raw);
-      if (Array.isArray(d) && d.every(t => t && t.id && Array.isArray(t.exercicios))) { treinos = d; return; }
+      if (Array.isArray(d) && d.every(t => t && t.id && Array.isArray(t.exercicios))) return d;
     }
   } catch (e) {}
-  treinos = JSON.parse(JSON.stringify(CONFIG.treinos));
-  salvarTreinos();
+  return null;
 }
-function salvarTreinos() { localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos)); }
-
-function carregarEstado() {
+function lerEstadoDoLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_ESTADO);
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (d && typeof d === 'object' && !Array.isArray(d)) { estado = d; return; }
-    }
+    if (raw) { const d = JSON.parse(raw); if (d && typeof d === 'object' && !Array.isArray(d)) return d; }
   } catch (e) {}
-  estado = {};
+  return {};
 }
-function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); }
-
-function carregarHistorico() {
+function lerHistoricoDoLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_HISTORICO);
-    if (raw) { const d = JSON.parse(raw); if (Array.isArray(d)) { historico = d; return; } }
+    if (raw) { const d = JSON.parse(raw); if (Array.isArray(d)) return d; }
   } catch (e) {}
-  historico = [];
+  return [];
 }
-function salvarHistorico() { localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico)); }
+
+function carregarTreinos() {
+  const d = lerTreinosDoLocalStorage();
+  treinos = d || JSON.parse(JSON.stringify(CONFIG.treinos));
+  salvarTreinos();
+}
+function carregarEstado() { estado = lerEstadoDoLocalStorage(); }
+function carregarHistorico() { historico = lerHistoricoDoLocalStorage(); }
+
+/* Escrita dupla: banco + espelho no localStorage */
+function salvarTreinos() {
+  localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos));
+  if (db) dbPut('treinos', treinos);
+}
+function salvarEstado() {
+  localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado));
+  if (db) dbPut('estado', estado);
+}
+function salvarHistorico() {
+  localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico));
+  if (db) dbPut('historico', historico);
+}
 
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
@@ -54,7 +133,7 @@ function mostrarToast(msg) {
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
 
-/* ---------- 2. NAVEGAÇÃO ---------- */
+/* ---------- 3. NAVEGAÇÃO ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewId).classList.add('active');
@@ -65,7 +144,7 @@ function navegar(viewId) {
   if (viewId === 'gerenciar') renderGerenciar();
 }
 
-/* ---------- 3. LISTAR TREINOS ---------- */
+/* ---------- 4. LISTAR TREINOS ---------- */
 function renderTreinos() {
   const lista = document.getElementById('listaTreinos');
   if (treinoAtivo) { renderExecucao(); return; }
@@ -97,7 +176,7 @@ function renderTreinos() {
   });
 }
 
-/* ---------- 4. EXECUTAR TREINO ---------- */
+/* ---------- 5. EXECUTAR TREINO ---------- */
 function tempoDoExercicio(ex) {
   if (!ex) return 0;
   if (ex.tipo === 'tempo') {
@@ -222,7 +301,7 @@ function concluirTreino() {
   renderExecucao();
 }
 
-/* ---------- 5. GERENCIAR (CRUD) ---------- */
+/* ---------- 6. GERENCIAR (CRUD) ---------- */
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
   if (!treinos.length) {
@@ -257,7 +336,10 @@ function excluirTreino(id) {
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
 
-/* ---------- EDITOR (seletor Repetições / Tempo) ---------- */
+/* ---------- 7. EDITOR (rótulos claros: séries / tempo / descanso) ---------- */
+const LBL = 'font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+const CAMPO = 'display:flex;flex-direction:column;gap:0.2rem;min-width:0;';
+
 function abrirEditor(treinoId) {
   const modal = document.getElementById('modalEditor');
   const corpo = document.getElementById('editorCorpo');
@@ -317,27 +399,44 @@ function abrirEditor(treinoId) {
           <select class="ed-icone">${sel}</select>
           <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equipamento">
         </div>
-        <div class="ed-tipo">
-          <select class="ed-tipo-select">
-            <option value="reps" ${tipo === 'reps' ? 'selected' : ''}>Repetições</option>
-            <option value="tempo" ${tipo === 'tempo' ? 'selected' : ''}>Tempo (segundos)</option>
-          </select>
-          <span class="ed-tipo-rotulo">${tipo === 'tempo' ? 'Tempo (s)' : 'Reps'}</span>
+        <div class="ed-tipo" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;align-items:end;margin-bottom:0.5rem;">
+          <label style="${CAMPO}">
+            <span style="${LBL}">Tipo de medição</span>
+            <select class="ed-tipo-select" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.5rem 0.6rem;font-size:0.8rem;">
+              <option value="reps" ${tipo === 'reps' ? 'selected' : ''}>Repetições</option>
+              <option value="tempo" ${tipo === 'tempo' ? 'selected' : ''}>Tempo (segundos)</option>
+            </select>
+          </label>
+          <span class="ed-tipo-rotulo" style="font-size:0.75rem;font-weight:800;color:var(--accent);padding:0.45rem 0.5rem;white-space:nowrap;">${tipo === 'tempo' ? '⏱️ Cronômetro' : '🔁 Repetições'}</span>
         </div>
         <div class="ed-linha">
-          <input type="number" class="ed-series" value="${ex.series}" min="1" placeholder="Séries">
-          <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="${tipo === 'tempo' ? 'Ex.: 45' : 'Ex.: 12'}">
-          <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="Desc(s)">
-          <input type="text" class="ed-carga" value="${ex.carga}" placeholder="Carga">
+          <label style="${CAMPO}">
+            <span style="${LBL}">Séries</span>
+            <input type="number" class="ed-series" value="${ex.series}" min="1" placeholder="3">
+          </label>
+          <label style="${CAMPO}">
+            <span class="ed-rotulo-reps" style="${LBL}">${tipo === 'tempo' ? 'Tempo (s)' : 'Reps'}</span>
+            <input type="text" class="ed-reps" value="${ex.repeticoes}" placeholder="${tipo === 'tempo' ? 'Ex.: 45' : 'Ex.: 12'}">
+          </label>
+          <label style="${CAMPO}">
+            <span style="${LBL}">Descanso (s)</span>
+            <input type="number" class="ed-descanso" value="${ex.descanso}" min="0" placeholder="60">
+          </label>
+          <label style="${CAMPO}">
+            <span style="${LBL}">Carga (kg)</span>
+            <input type="text" class="ed-carga" value="${ex.carga}" placeholder="—">
+          </label>
         </div>
         <button class="btn btn-outline btn-pequeno ed-remover">Remover exercício</button>`;
 
       const selTipo = row.querySelector('.ed-tipo-select');
       const reps = row.querySelector('.ed-reps');
-      const rotulo = row.querySelector('.ed-tipo-rotulo');
+      const rotuloReps = row.querySelector('.ed-rotulo-reps');
+      const rotuloTipo = row.querySelector('.ed-tipo-rotulo');
       selTipo.addEventListener('change', () => {
         const tempo = selTipo.value === 'tempo';
-        rotulo.textContent = tempo ? 'Tempo (s)' : 'Reps';
+        rotuloReps.textContent = tempo ? 'Tempo (s)' : 'Reps';
+        rotuloTipo.textContent = tempo ? '⏱️ Cronômetro' : '🔁 Repetições';
         reps.placeholder = tempo ? 'Ex.: 45' : 'Ex.: 12';
       });
 
@@ -380,7 +479,7 @@ function abrirEditor(treinoId) {
   modal.classList.add('aberto');
 }
 
-/* ---------- 6. HISTÓRICO ---------- */
+/* ---------- 8. HISTÓRICO ---------- */
 function registrarHistorico(t) {
   if (!t || !t.exercicios.length) return;
   const data = hoje();
@@ -437,7 +536,7 @@ function renderHistorico() {
   }).join('');
 }
 
-/* ---------- 7. SOM (Web Audio API) ---------- */
+/* ---------- 9. SOM (Web Audio API) ---------- */
 let audioCtx = null;
 
 function desbloquearAudio() {
@@ -479,7 +578,7 @@ function tocarSom(tipo) {
   }
 }
 
-/* ---------- 8. TIMER (contagem por tempo real + bipes) ---------- */
+/* ---------- 10. TIMER (contagem por tempo real + bipes) ---------- */
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -566,13 +665,41 @@ document.getElementById('timerPausar').addEventListener('click', () => {
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
-/* ---------- 9. INICIALIZAÇÃO ---------- */
+/* ---------- 11. INICIALIZAÇÃO ---------- */
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
 document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
 
-carregarTreinos();
-carregarEstado();
-carregarHistorico();
-navegar('treinos');
+async function iniciarApp() {
+  try {
+    await abrirBanco();
+    await migrarSeNecessario();
+
+    const t = await dbGet('treinos');
+    const e = await dbGet('estado');
+    const h = await dbGet('historico');
+    if (t !== undefined) treinos = t;
+    if (e !== undefined) estado = e;
+    if (h !== undefined) historico = h;
+  } catch (err) {
+    // Banco indisponível: usa localStorage como fallback
+    carregarTreinos();
+    carregarEstado();
+    carregarHistorico();
+  }
+
+  // Garantias de formato (sem sobrescrever lista vazia intencional)
+  if (!Array.isArray(treinos)) {
+    const d = lerTreinosDoLocalStorage();
+    treinos = d !== null ? d : JSON.parse(JSON.stringify(CONFIG.treinos));
+    if (d === null) salvarTreinos();
+  }
+  if (!estado || typeof estado !== 'object' || Array.isArray(estado)) estado = lerEstadoDoLocalStorage();
+  if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
+  if (!Array.isArray(historico)) historico = [];
+
+  navegar('treinos');
+}
+
+iniciarApp();
