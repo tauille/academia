@@ -2,99 +2,131 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>iTrainer — Treinos</title>
+
+  <!-- PWA (versão reduzida de 3 linhas) -->
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b0b0e">
-  <title>itrainer</title>
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Fontes -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <!-- CSS estrutural de contingência: o styles.css tem prioridade e sobrescreve o que já define -->
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;height:100%}
+    body{font-family:var(--font-body,'Inter',system-ui,sans-serif);background:var(--bg,#0b0b0e);color:var(--text,#f4f4f5)}
+    .app-header{position:fixed;top:0;left:0;right:0;height:var(--header-h,60px);display:flex;align-items:center;padding:0 1rem;background:rgba(11,11,14,.92);backdrop-filter:blur(8px);z-index:50;border-bottom:1px solid var(--border,rgba(255,255,255,.07))}
+    .app-logo{font-family:var(--font-display,'Bebas Neue',sans-serif);font-size:1.6rem;letter-spacing:.12em;color:var(--accent,#c8f31d)}
+    .app-main{position:fixed;top:var(--header-h,60px);bottom:var(--nav-h,calc(60px + env(safe-area-inset-bottom,0px)));left:0;right:0;overflow-y:auto;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
+    .view{display:none}.view.active{display:block;animation:fade .18s ease}
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+    .app-nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h,calc(60px + env(safe-area-inset-bottom,0px)));display:flex;background:var(--surface,#141418);border-top:1px solid var(--border,rgba(255,255,255,.07));z-index:50;padding-bottom:env(safe-area-inset-bottom,0px)}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;background:none;border:none;color:var(--muted,#9ca3af);font-size:.68rem;font-family:inherit;cursor:pointer}
+    .nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .nav-item.active{color:var(--accent,#c8f31d)}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:flex-end;justify-content:center}
+    .modal.aberto{display:flex}
+    .modal-body{width:100%;max-width:480px;max-height:88vh;overflow-y:auto;background:var(--surface-2,#1c1c22);border-radius:20px 20px 0 0;padding:1.2rem}
+    .timer-card{position:relative;padding:1.5rem;max-width:420px;width:100%;text-align:center;background:var(--surface-2,#1c1c22);border-radius:20px;margin:auto}
+    .timer-fechar{position:absolute;top:.6rem;right:.6rem;background:none;border:none;color:var(--muted,#9ca3af);font-size:1.1rem;cursor:pointer}
+    .timer-ring-wrap{position:relative;width:150px;margin:1rem auto}
+    .timer-ring{transform:rotate(-90deg)}
+    .ring-bg,.ring-prog{fill:none;stroke-width:9;stroke-linecap:round}
+    .ring-bg{stroke:rgba(255,255,255,.08)}
+    .ring-prog{stroke:var(--accent,#c8f31d);transition:stroke-dashoffset .25s linear}
+    .timer-numero{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.6rem;font-weight:800;font-family:var(--font-display,'Bebas Neue',sans-serif)}
+    .toast{position:fixed;left:50%;bottom:calc(var(--nav-h,60px) + 12px);transform:translateX(-50%) translateY(20px);background:var(--surface-3,#26262e);color:var(--text,#f4f4f5);padding:.6rem 1.1rem;border-radius:999px;font-size:.82rem;opacity:0;pointer-events:none;transition:.25s;z-index:200;border:1px solid var(--border-strong,rgba(255,255,255,.12));box-shadow:var(--shadow,0 10px 40px rgba(0,0,0,.45))}
+    .toast.mostrar{opacity:1;transform:translateX(-50%) translateY(0)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border:none;border-radius:var(--radius-sm,10px);padding:.85rem 1.1rem;font-size:.92rem;font-weight:700;font-family:inherit;cursor:pointer}
+    .btn-primary{background:var(--accent-grad,linear-gradient(135deg,#d4ff3d,#a3e635));color:#0b0b0e}
+    .btn-outline{background:transparent;border:1px solid var(--border-strong,rgba(255,255,255,.12));color:var(--text,#f4f4f5)}
+    .btn-danger{background:rgba(248,113,113,.14);color:var(--danger,#f87171)}
+    .btn-pequeno{padding:.5rem .8rem;font-size:.78rem;border-radius:8px}
+    .btn-bloco{width:100%;margin-top:1rem}
+  </style>
+
+  <!-- CSS principal do app (sobrescreve o bloco acima onde houver definições) -->
+  <link rel="stylesheet" href="css/styles.css?v=6">
 </head>
 <body>
 
   <header class="app-header">
-    <div class="header-inner">
-      <button class="logo" data-view="treinos">i<span>trainer</span></button>
-    </div>
+    <span class="app-logo">ITRAINER</span>
   </header>
 
   <main class="app-main" id="appMain">
 
-    <!-- TELA TREINOS (listar + executar) -->
+    <!-- Treinos -->
     <section class="view active" id="view-treinos">
-      <div class="container">
-        <div id="listaTreinos"></div>
-      </div>
+      <div id="listaTreinos"></div>
     </section>
 
-    <!-- TELA HISTÓRICO -->
+    <!-- Histórico -->
     <section class="view" id="view-historico">
-      <div class="container">
-        <div class="section-titulo">
-          <h2>Histórico</h2>
-          <p>Registro dos treinos concluídos.</p>
-        </div>
-        <div id="listaHistorico"></div>
-      </div>
+      <div id="listaHistorico"></div>
     </section>
 
-    <!-- TELA GERENCIAR (CRUD) -->
+    <!-- Gerenciar -->
     <section class="view" id="view-gerenciar">
-      <div class="container">
-        <div class="section-titulo">
-          <h2>Gerenciar</h2>
-          <p>Crie, edite ou exclua treinos e exercícios.</p>
-        </div>
-        <div id="listaGerenciar"></div>
-        <button class="btn btn-primary btn-bloco" id="btnNovoTreino">+ Novo treino</button>
-      </div>
+      <div id="listaGerenciar"></div>
+      <button class="btn btn-primary btn-bloco" id="btnNovoTreino" type="button">+ Novo treino</button>
     </section>
 
   </main>
 
-  <nav class="bottom-nav">
-    <button class="nav-item active" data-view="treinos">
-      <span class="nav-icone">🏋️</span><span>Treinos</span>
+  <!-- Barra de navegação -->
+  <nav class="app-nav">
+    <button class="nav-item active" data-view="treinos" type="button">
+      <svg viewBox="0 0 24 24"><path d="M6.5 6.5v11M4 8v8M2.5 9.5v5M17.5 6.5v11M20 8v8M21.5 9.5v5M6.5 12h11"/></svg>
+      <span>Treinos</span>
     </button>
-    <button class="nav-item" data-view="historico">
-      <span class="nav-icone">📋</span><span>Histórico</span>
+    <button class="nav-item" data-view="historico" type="button">
+      <svg viewBox="0 0 24 24"><path d="M9 4h6M9 4a2 2 0 0 0-2 2v14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6a2 2 0 0 0-2-2M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/><path d="M9 12h6M9 16h6"/></svg>
+      <span>Histórico</span>
     </button>
-    <button class="nav-item" data-view="gerenciar">
-      <span class="nav-icone">⚙️</span><span>Gerenciar</span>
+    <button class="nav-item" data-view="gerenciar" type="button">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+      <span>Gerenciar</span>
     </button>
   </nav>
 
-  <!-- TIMER -->
-  <div class="modal" id="modalTimer">
-    <div class="modal-sheet">
-      <span class="timer-titulo" id="timerTitulo">Descanso</span>
-      <span class="timer-exercicio" id="timerExercicio"></span>
-      <div class="timer-ring-wrap">
-        <svg class="ring timer-ring" viewBox="0 0 120 120">
-          <circle class="ring-bg" cx="60" cy="60" r="52"/>
-          <circle class="ring-fill timer-ring-fill" id="timerRing" cx="60" cy="60" r="52"/>
-        </svg>
-        <div class="timer-numero" id="timerNumero">0</div>
-      </div>
-      <div class="timer-botoes">
-        <button class="btn btn-outline" id="timerPausar">Pausar</button>
-        <button class="btn btn-primary" id="timerFechar">Pular</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- EDITOR DE TREINO -->
+  <!-- Modal: editor de treinos -->
   <div class="modal" id="modalEditor">
-    <div class="modal-sheet modal-editor">
-      <div id="editorCorpo"></div>
+    <div class="modal-body" id="editorCorpo"></div>
+  </div>
+
+  <!-- Modal: timer -->
+  <div class="modal" id="modalTimer">
+    <div class="timer-card">
+      <button class="timer-fechar" id="timerFechar" type="button">✕</button>
+      <h2 id="timerTitulo">Descanso</h2>
+      <div class="timer-ring-wrap">
+        <svg class="timer-ring" width="150" height="150" viewBox="0 0 140 140">
+          <circle class="ring-bg" cx="70" cy="70" r="52"></circle>
+          <circle class="ring-prog" id="timerRing" cx="70" cy="70" r="52"></circle>
+        </svg>
+        <span class="timer-numero" id="timerNumero">60</span>
+      </div>
+      <p id="timerExercicio" style="color:var(--muted);font-size:.85rem;margin:.4rem 0 1rem;"></p>
+      <button class="btn btn-primary btn-bloco" id="timerPausar" type="button">Pausar</button>
     </div>
   </div>
 
-  <!-- TOAST -->
+  <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <script src="js/config.js" defer></script>
-  <script src="js/main.js?v=5" defer></script>
-  
+  <!-- Scripts -->
+  <script src="js/config.js?v=6" defer></script>
+  <script src="js/main.js?v=6" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+  </script>
 </body>
 </html>

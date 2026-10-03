@@ -1,7 +1,8 @@
 /* ==========================================================================
-   itrainer — Lógica do app (CRUD + execução + timer com som + histórico)
-   v5: banco de dados IndexedDB + migração automática do localStorage
-       + editor com rótulos claros (séries / tempo / descanso)
+   itrainer — Lógica do app (CRUD + execução + timer + histórico)
+   v6: + Backup (Exportar/Importar JSON)
+       + Estatísticas no Histórico
+       + Tela sempre ativa (Wake Lock) durante o timer
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
@@ -62,29 +63,20 @@ function dbGet(store) {
   });
 }
 
-// Copia os dados do localStorage para o banco apenas na primeira carga
 async function migrarSeNecessario() {
   if (!db) return;
   const jaTem = await dbGet('treinos');
   if (jaTem !== undefined) return;
-
-  const t = lerTreinosDoLocalStorage();
-  const e = lerEstadoDoLocalStorage();
-  const h = lerHistoricoDoLocalStorage();
-
-  await dbPut('treinos', t || JSON.parse(JSON.stringify(CONFIG.treinos)));
-  await dbPut('estado', e);
-  await dbPut('historico', h);
+  await dbPut('treinos', lerTreinosDoLocalStorage() || JSON.parse(JSON.stringify(CONFIG.treinos)));
+  await dbPut('estado', lerEstadoDoLocalStorage());
+  await dbPut('historico', lerHistoricoDoLocalStorage());
 }
 
-/* ---------- 2. LEITURA LOCALSTORAGE (fallback) ---------- */
+/* ---------- 2. LOCALSTORAGE (fallback) ---------- */
 function lerTreinosDoLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_TREINOS);
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (Array.isArray(d) && d.every(t => t && t.id && Array.isArray(t.exercicios))) return d;
-    }
+    if (raw) { const d = JSON.parse(raw); if (Array.isArray(d) && d.every(t => t && t.id && Array.isArray(t.exercicios))) return d; }
   } catch (e) {}
   return null;
 }
@@ -103,27 +95,13 @@ function lerHistoricoDoLocalStorage() {
   return [];
 }
 
-function carregarTreinos() {
-  const d = lerTreinosDoLocalStorage();
-  treinos = d || JSON.parse(JSON.stringify(CONFIG.treinos));
-  salvarTreinos();
-}
+function carregarTreinos() { treinos = lerTreinosDoLocalStorage() || JSON.parse(JSON.stringify(CONFIG.treinos)); salvarTreinos(); }
 function carregarEstado() { estado = lerEstadoDoLocalStorage(); }
 function carregarHistorico() { historico = lerHistoricoDoLocalStorage(); }
 
-/* Escrita dupla: banco + espelho no localStorage */
-function salvarTreinos() {
-  localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos));
-  if (db) dbPut('treinos', treinos);
-}
-function salvarEstado() {
-  localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado));
-  if (db) dbPut('estado', estado);
-}
-function salvarHistorico() {
-  localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico));
-  if (db) dbPut('historico', historico);
-}
+function salvarTreinos() { localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos)); if (db) dbPut('treinos', treinos); }
+function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); if (db) dbPut('estado', estado); }
+function salvarHistorico() { localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico)); if (db) dbPut('historico', historico); }
 
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
@@ -301,26 +279,82 @@ function concluirTreino() {
   renderExecucao();
 }
 
-/* ---------- 6. GERENCIAR (CRUD) ---------- */
+/* ---------- 6. GERENCIAR (CRUD + BACKUP) ---------- */
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
+
+  const backupHtml = `
+    <div class="backup-box" style="margin-bottom:1rem;padding:0.9rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+      <strong style="display:block;margin-bottom:0.5rem;font-size:0.85rem;">💾 Backup dos dados</strong>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-pequeno" id="btnExportar">Exportar (salvar arquivo)</button>
+        <button class="btn btn-outline btn-pequeno" id="btnImportar">Importar</button>
+        <input type="file" id="fileImportar" accept="application/json,.json" style="display:none;">
+      </div>
+      <p style="margin:0.5rem 0 0;font-size:0.72rem;color:var(--muted);">Exportar baixa um arquivo JSON com treinos, progresso e histórico. Importar restaura de um arquivo de backup.</p>
+    </div>`;
+
   if (!treinos.length) {
-    lista.innerHTML = '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>+ Novo treino</b>.</div>';
-    return;
+    lista.innerHTML = backupHtml + '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>+ Novo treino</b>.</div>';
+  } else {
+    lista.innerHTML = backupHtml + treinos.map(t => `
+      <div class="dia-gerenciar">
+        <div class="dia-gerenciar-info">
+          <strong>${t.nome}</strong>
+          <span>${t.exercicios.length} exercício(s)</span>
+        </div>
+        <div class="dia-gerenciar-acoes">
+          <button class="btn btn-outline btn-pequeno" data-editar="${t.id}">Editar</button>
+          <button class="btn btn-danger btn-pequeno" data-excluir="${t.id}">Excluir</button>
+        </div>
+      </div>`).join('');
   }
-  lista.innerHTML = treinos.map(t => `
-    <div class="dia-gerenciar">
-      <div class="dia-gerenciar-info">
-        <strong>${t.nome}</strong>
-        <span>${t.exercicios.length} exercício(s)</span>
-      </div>
-      <div class="dia-gerenciar-acoes">
-        <button class="btn btn-outline btn-pequeno" data-editar="${t.id}">Editar</button>
-        <button class="btn btn-danger btn-pequeno" data-excluir="${t.id}">Excluir</button>
-      </div>
-    </div>`).join('');
+
   lista.querySelectorAll('[data-editar]').forEach(btn => btn.addEventListener('click', () => abrirEditor(btn.dataset.editar)));
   lista.querySelectorAll('[data-excluir]').forEach(btn => btn.addEventListener('click', () => excluirTreino(btn.dataset.excluir)));
+
+  const btnExportar = document.getElementById('btnExportar');
+  if (btnExportar) btnExportar.addEventListener('click', exportarDados);
+  const btnImportar = document.getElementById('btnImportar');
+  const fileImportar = document.getElementById('fileImportar');
+  if (btnImportar) btnImportar.addEventListener('click', () => fileImportar.click());
+  if (fileImportar) fileImportar.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) importarDados(e.target.files[0]);
+    e.target.value = '';
+  });
+}
+
+function exportarDados() {
+  const dados = { app: 'itrainer', versao: 6, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'itrainer-backup-' + hoje() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  mostrarToast('✅ Backup exportado');
+}
+
+function importarDados(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const dados = JSON.parse(e.target.result);
+      if (!dados || !Array.isArray(dados.treinos)) throw new Error('formato-invalido');
+      treinos = dados.treinos;
+      estado = (dados.estado && typeof dados.estado === 'object' && !Array.isArray(dados.estado)) ? dados.estado : {};
+      historico = Array.isArray(dados.historico) ? dados.historico : [];
+      salvarTreinos(); salvarEstado(); salvarHistorico();
+      mostrarToast('✅ Dados importados');
+      renderGerenciar(); renderTreinos(); renderHistorico();
+    } catch (err) {
+      mostrarToast('❌ Arquivo de backup inválido');
+    }
+  };
+  reader.readAsText(file);
 }
 
 function excluirTreino(id) {
@@ -336,7 +370,7 @@ function excluirTreino(id) {
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
 
-/* ---------- 7. EDITOR (rótulos claros: séries / tempo / descanso) ---------- */
+/* ---------- 7. EDITOR ---------- */
 const LBL = 'font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 const CAMPO = 'display:flex;flex-direction:column;gap:0.2rem;min-width:0;';
 
@@ -479,7 +513,7 @@ function abrirEditor(treinoId) {
   modal.classList.add('aberto');
 }
 
-/* ---------- 8. HISTÓRICO ---------- */
+/* ---------- 8. HISTÓRICO + ESTATÍSTICAS ---------- */
 function registrarHistorico(t) {
   if (!t || !t.exercicios.length) return;
   const data = hoje();
@@ -502,19 +536,75 @@ function registrarHistorico(t) {
 
 function capitalizar(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+function calcularEstatisticas() {
+  const stats = { total: historico.length, ultimos7: 0, mediaSemana: 0, maisFrequente: null, volume: 0, streak: 0 };
+  if (!historico.length) return stats;
+
+  const hojeMs = new Date(hoje() + 'T00:00:00').getTime();
+  const diaMs = 86400000;
+  const freq = {};
+  let volume = 0;
+
+  historico.forEach(h => {
+    const t = new Date(h.data + 'T00:00:00').getTime();
+    if (hojeMs - t <= 7 * diaMs) stats.ultimos7++;
+    (h.exercicios || []).forEach(e => {
+      freq[e.nome] = (freq[e.nome] || 0) + 1;
+      const carga = parseFloat(String(e.carga).replace(',', '.'));
+      if (!isNaN(carga) && carga > 0) volume += (e.series || 0) * carga;
+    });
+  });
+
+  // Média por semana (últimas 4 semanas)
+  const datasUnicas = [...new Set(historico.map(h => h.data))].sort();
+  const inicio = datasUnicas.length ? new Date(datasUnicas[0] + 'T00:00:00').getTime() : hojeMs;
+  const semanas = Math.max(1, Math.ceil((hojeMs - inicio) / (7 * diaMs)));
+  stats.mediaSemana = Math.round((historico.length / semanas) * 10) / 10;
+
+  // Exercício mais frequente
+  let max = 0;
+  Object.keys(freq).forEach(k => { if (freq[k] > max) { max = freq[k]; stats.maisFrequente = k; } });
+
+  // Sequência de dias seguidos (streak)
+  const set = new Set(historico.map(h => h.data));
+  let streak = 0;
+  let d = new Date(hojeMs);
+  while (set.has(d.toISOString().split('T')[0])) { streak++; d = new Date(d.getTime() - diaMs); }
+
+  stats.volume = volume;
+  stats.streak = streak;
+  return stats;
+}
+
 function renderHistorico() {
   const lista = document.getElementById('listaHistorico');
+  const stats = calcularEstatisticas();
+
+  const statsHtml = `
+    <div class="stats-box" style="margin-bottom:1rem;padding:0.9rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+      <strong style="display:block;margin-bottom:0.6rem;font-size:0.85rem;">📊 Suas estatísticas</strong>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;">
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.total}</div><div style="font-size:0.68rem;color:var(--muted);">Treinos totais</div></div>
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.ultimos7}</div><div style="font-size:0.68rem;color:var(--muted);">Últimos 7 dias</div></div>
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.mediaSemana}</div><div style="font-size:0.68rem;color:var(--muted);">Média/semana</div></div>
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.streak} 🔥</div><div style="font-size:0.68rem;color:var(--muted);">Dias seguidos</div></div>
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;grid-column:1/-1;"><div style="font-size:1.1rem;font-weight:800;color:var(--accent);">${stats.volume > 0 ? stats.volume + ' kg' : '—'}</div><div style="font-size:0.68rem;color:var(--muted);">Volume total (séries × carga)</div></div>
+        <div style="background:var(--surface);border-radius:8px;padding:0.6rem;grid-column:1/-1;"><div style="font-size:1rem;font-weight:800;color:var(--text);">${stats.maisFrequente || '—'}</div><div style="font-size:0.68rem;color:var(--muted);">Exercício mais frequente</div></div>
+      </div>
+    </div>`;
+
   if (!historico.length) {
-    lista.innerHTML = '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
+    lista.innerHTML = statsHtml + '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
     return;
   }
+
   const grupos = {};
   historico.forEach(h => {
     if (!grupos[h.data]) grupos[h.data] = [];
     grupos[h.data].push(h);
   });
   const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-  lista.innerHTML = datas.map(data => {
+  lista.innerHTML = statsHtml + datas.map(data => {
     const titulo = capitalizar(
       new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
     );
@@ -578,7 +668,30 @@ function tocarSom(tipo) {
   }
 }
 
-/* ---------- 10. TIMER (contagem por tempo real + bipes) ---------- */
+/* ---------- 10. TELA SEMPRE ATIVA (Wake Lock) ---------- */
+let wakeLock = null;
+let wakeLockAtivo = false;
+
+async function solicitarWakeLock() {
+  if (!('wakeLock' in navigator)) return; // iOS Safari não suporta
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLockAtivo = true;
+    wakeLock.addEventListener('release', () => { wakeLockAtivo = false; });
+  } catch (e) { wakeLockAtivo = false; }
+}
+
+function liberarWakeLock() {
+  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  wakeLockAtivo = false;
+}
+
+// Re-solicita ao voltar para a aba (o navegador pode liberar sozinho)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && wakeLockAtivo) solicitarWakeLock();
+});
+
+/* ---------- 11. TIMER (contagem por tempo real + bipes) ---------- */
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -625,9 +738,16 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   ring.style.strokeDashoffset = 0;
 
   modal.classList.add('aberto');
+  solicitarWakeLock(); // mantém a tela acesa enquanto o timer roda
 
   clearInterval(timerInterval);
   timerInterval = setInterval(stepTimer, 250);
+}
+
+function fecharTimerModal() {
+  clearInterval(timerInterval);
+  document.getElementById('modalTimer').classList.remove('aberto');
+  liberarWakeLock();
 }
 
 function stepTimer() {
@@ -648,6 +768,7 @@ function stepTimer() {
   if (restante <= 0) {
     clearInterval(timerInterval);
     document.getElementById('modalTimer').classList.remove('aberto');
+    liberarWakeLock();
     tocarSom(timerFinalTipo);
     const cb = aoTerminarCallback;
     aoTerminarCallback = null;
@@ -655,17 +776,14 @@ function stepTimer() {
   }
 }
 
-document.getElementById('timerFechar').addEventListener('click', () => {
-  clearInterval(timerInterval);
-  document.getElementById('modalTimer').classList.remove('aberto');
-});
+document.getElementById('timerFechar').addEventListener('click', fecharTimerModal);
 
 document.getElementById('timerPausar').addEventListener('click', () => {
   timerRodando = !timerRodando;
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
-/* ---------- 11. INICIALIZAÇÃO ---------- */
+/* ---------- 12. INICIALIZAÇÃO ---------- */
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
@@ -675,7 +793,6 @@ async function iniciarApp() {
   try {
     await abrirBanco();
     await migrarSeNecessario();
-
     const t = await dbGet('treinos');
     const e = await dbGet('estado');
     const h = await dbGet('historico');
@@ -683,13 +800,11 @@ async function iniciarApp() {
     if (e !== undefined) estado = e;
     if (h !== undefined) historico = h;
   } catch (err) {
-    // Banco indisponível: usa localStorage como fallback
     carregarTreinos();
     carregarEstado();
     carregarHistorico();
   }
 
-  // Garantias de formato (sem sobrescrever lista vazia intencional)
   if (!Array.isArray(treinos)) {
     const d = lerTreinosDoLocalStorage();
     treinos = d !== null ? d : JSON.parse(JSON.stringify(CONFIG.treinos));

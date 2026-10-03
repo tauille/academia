@@ -1,18 +1,13 @@
 {
-  "name": "itrainer",
-  "short_name": "itrainer",
-  "description": "Treinos de musculação, spinning, jump e muay thai.",
+  "name": "iTrainer — Treinos",
+  "short_name": "iTrainer",
+  "description": "Aplicativo de treinos com cronômetro, histórico e estatísticas.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#121214",
-  "theme_color": "#121214",
-  "lang": "pt-BR",
+  "background_color": "#0b0b0e",
+  "theme_color": "#0b0b0e",
   "icons": [
-    {
-      "src": "assets/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
