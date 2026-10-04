@@ -1,4 +1,3 @@
-/* ============================================================
    iTrainer — Módulo Nutrição  (js/nutricao.js)
    ------------------------------------------------------------
    Diário alimentar · Banco de alimentos · Metas · Água · Histórico
@@ -118,9 +117,8 @@ function nutAbrirBanco() {
   return new Promise(function (resolve, reject) {
     if (typeof indexedDB === 'undefined') { reject(new Error('sem-idb')); return; }
     var req;
-    try {
-      req = indexedDB.open(NUT_BANCO.nome, NUT_BANCO.versao);
-    } catch (e) { reject(e); return; }
+    try { req = indexedDB.open(NUT_BANCO.nome, NUT_BANCO.versao); }
+    catch (e) { reject(e); return; }
     var feito = false;
     var timer = setTimeout(function () {
       if (!feito) { feito = true; reject(new Error('timeout-idb')); }
@@ -713,4 +711,197 @@ function nutModalAlimento(id) {
 }
 function nutSalvarAlimentoModal(id) {
   var nome = (document.getElementById('nut-f-nome').value || '').trim();
-  var
+    var porcao = (document.getElementById('nut-f-porcao').value || '').trim();
+  var kcal = nutNum(document.getElementById('nut-f-kcal').value, LIMITES.kcalPorcao.min, LIMITES.kcalPorcao.max);
+  var prot = nutNum(document.getElementById('nut-f-prot').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
+  var carb = nutNum(document.getElementById('nut-f-carb').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
+  var gord = nutNum(document.getElementById('nut-f-gord').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
+  if (!nome || !porcao || kcal === null || prot === null || carb === null || gord === null) {
+    nutToast('Preencha nome, porção e valores válidos.', true);
+    return;
+  }
+  if (id && nutAlimentos[id]) {
+    var a = nutAlimentos[id];
+    a.nome = nome; a.porcao = porcao; a.kcal = kcal; a.prot = prot; a.carb = carb; a.gord = gord;
+  } else {
+    var novoId = 'user-' + Date.now();
+    nutAlimentos[novoId] = { id: novoId, nome: nome, porcao: porcao, kcal: kcal, prot: prot, carb: carb, gord: gord };
+  }
+  nutSalvarAlimentos();
+  nutToast(id ? 'Alimento atualizado.' : 'Alimento cadastrado.');
+  nutRender();
+}
+
+/* ================= VIEW: DIÁRIO (montagem) ================= */
+function nutHtmlDiario() {
+  var total = nutTotaisDia(nutHoje());
+  return (
+    '<div style="padding:16px;max-width:520px;margin:0 auto">' +
+      nutBanner() + nutMiniNav() +
+      nutHtmlResumo(total) +
+      nutHtmlRefeicoes() +
+      nutHtmlAgua() +
+    '</div>'
+  );
+}
+
+/* ================= RENDERIZAÇÃO ================= */
+function nutRender() {
+  var view = document.getElementById(NUT_VIEW_ID);
+  if (!view) return;
+  if (nutView === 'diario') view.innerHTML = nutHtmlDiario();
+  else if (nutView === 'historico') view.innerHTML = nutHtmlHistorico();
+  else if (nutView === 'alimentos') view.innerHTML = nutHtmlAlimentos();
+}
+
+/* ================= AÇÕES ================= */
+function nutAdicionarAlimento(refeicao, id) {
+  var caixa = document.getElementById('nut-qtd-' + id);
+  var qtd = nutNum(caixa ? caixa.value : '1', LIMITES.qtd.min, LIMITES.qtd.max);
+  if (qtd === null) { nutToast('Quantidade inválida.', true); return; }
+  var hoje = nutHoje();
+  if (!nutRegistros[hoje]) nutRegistros[hoje] = nutRefeicoesVazias();
+  var lista = nutRegistros[hoje][refeicao];
+  var existente = null;
+  for (var i = 0; i < lista.length; i++) { if (lista[i].id === id) { existente = lista[i]; break; } }
+  if (existente) existente.qtd = Math.round((existente.qtd + qtd) * 100) / 100;
+  else lista.push({ id: id, qtd: qtd });
+  nutSalvarRegistros();
+  if (nutOverlayBusca) { nutOverlayBusca.remove(); nutOverlayBusca = null; }
+  nutRender();
+  var rotulo = '';
+  REFEICOES.forEach(function (r) { if (r.chave === refeicao) rotulo = r.rotulo; });
+  nutToast('Adicionado ao ' + rotulo + '.');
+}
+
+function nutMudarQtd(refeicao, id, delta) {
+  var hoje = nutHoje();
+  var lista = (nutRegistros[hoje] || {})[refeicao] || [];
+  var item = null;
+  for (var i = 0; i < lista.length; i++) { if (lista[i].id === id) { item = lista[i]; break; } }
+  if (!item) return;
+  item.qtd = Math.round((item.qtd + delta) * 100) / 100;
+  if (item.qtd <= 0) {
+    if (!nutRegistros[hoje]) nutRegistros[hoje] = nutRefeicoesVazias();
+    nutRegistros[hoje][refeicao] = lista.filter(function (x) { return x.id !== id; });
+  }
+  nutSalvarRegistros();
+  nutRender();
+}
+
+function nutRemoverItem(refeicao, id) {
+  var hoje = nutHoje();
+  if (!nutRegistros[hoje] || !nutRegistros[hoje][refeicao]) return;
+  nutRegistros[hoje][refeicao] = nutRegistros[hoje][refeicao].filter(function (x) { return x.id !== id; });
+  nutSalvarRegistros();
+  nutRender();
+}
+
+function nutMudarAgua(delta) {
+  var hoje = nutHoje();
+  nutAgua[hoje] = nutClamp((nutAgua[hoje] || 0) + delta, LIMITES.agua.min, LIMITES.agua.max);
+  nutSalvarAgua();
+  nutRender();
+}
+
+function nutSetarAgua() {
+  var input = document.getElementById('nut-agua-input');
+  if (!input) return;
+  var v = nutNum(input.value, LIMITES.agua.min, LIMITES.agua.max);
+  if (v === null) { nutToast('Valor de água inválido.', true); return; }
+  nutAgua[nutHoje()] = v;
+  nutSalvarAgua();
+  nutRender();
+}
+
+function nutExcluirAlimento(id) {
+  if (!nutAlimentos[id]) return;
+  delete nutAlimentos[id];
+  nutSalvarAlimentos();
+  nutToast('Alimento excluído.');
+  nutRender();
+}
+
+/* ================= CLIQUE (delegação) ================= */
+function nutCliqueView(ev) {
+  var alvo = ev.target && ev.target.closest ? ev.target.closest('[data-nut]') : null;
+  if (!alvo) return;
+  var acao = alvo.getAttribute('data-nut');
+  var refeicao = alvo.getAttribute('data-refeicao');
+  var id = alvo.getAttribute('data-id');
+  var view = alvo.getAttribute('data-view');
+  var aba = alvo.getAttribute('data-aba');
+  switch (acao) {
+    case 'ver': ver(view); break;
+    case 'abrir-metas': nutModalMetas(); break;
+    case 'add-refeicao': nutModalAdicionar(refeicao); break;
+    case 'add-alimento': nutAdicionarAlimento(refeicao, id); break;
+    case 'qtd-mais': nutMudarQtd(refeicao, id, 1); break;
+    case 'qtd-menos': nutMudarQtd(refeicao, id, -1); break;
+    case 'editar-qtd': nutModalQuantidade(refeicao, id); break;
+    case 'remover-item': nutRemoverItem(refeicao, id); break;
+    case 'agua-mais-200': nutMudarAgua(200); break;
+    case 'agua-mais-500': nutMudarAgua(500); break;
+    case 'agua-menos': nutMudarAgua(-200); break;
+    case 'agua-ok': nutSetarAgua(); break;
+    case 'hist-aba': nutHistAba = aba; nutRender(); break;
+    case 'novo-alimento': nutModalAlimento(null); break;
+    case 'editar-alimento': nutModalAlimento(id); break;
+    case 'excluir-alimento': nutExcluirAlimento(id); break;
+  }
+}
+
+/* ================= BACKUP ================= */
+function nutBackupExtrair() {
+  return {
+    versao: 1,
+    geradoEm: new Date().toISOString(),
+    alimentos: nutAlimentosPessoais(),
+    metas: nutMetas,
+    registros: nutRegistros,
+    agua: nutAgua,
+    perfil: nutPerfil,
+  };
+}
+
+function nutBackupAplicar(dados) {
+  if (!dados || typeof dados !== 'object') throw new Error('backup-invalido');
+  if (dados.metas && typeof dados.metas === 'object') {
+    nutMetas = Object.assign({}, METAS_PADRAO, dados.metas);
+    nutSalvarMetas();
+  }
+  if (dados.alimentos && typeof dados.alimentos === 'object') {
+    Object.keys(dados.alimentos).forEach(function (id) {
+      if (id.indexOf('user-') === 0 || id.indexOf('import-') === 0) {
+        nutAlimentos[id] = dados.alimentos[id];
+      }
+    });
+    nutSalvarAlimentos();
+  }
+  if (dados.registros && typeof dados.registros === 'object') { nutRegistros = dados.registros; nutSalvarRegistros(); }
+  if (dados.agua && typeof dados.agua === 'object') { nutAgua = dados.agua; nutSalvarAgua(); }
+  if (dados.perfil && typeof dados.perfil === 'object') { nutPerfil = dados.perfil; }
+  nutPronto = true;
+  nutRender();
+}
+
+/* ================= INICIALIZAÇÃO ================= */
+function nutInit() {
+  var view = document.getElementById(NUT_VIEW_ID);
+  if (!view) return;
+  view.addEventListener('click', nutCliqueView);
+  nutGarantirEstado().then(function () {
+    nutRender();
+  }).catch(function () {
+    nutPronto = true;
+    nutRender();
+  });
+}
+
+/* ================= EXPORTAÇÃO (main.js usa este objeto) ================= */
+window.Nutricao = {
+  init: nutInit,
+  ver: ver,
+  backupExtrair: nutBackupExtrair,
+  backupAplicar: nutBackupAplicar,
+};
