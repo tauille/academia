@@ -6,39 +6,29 @@
    Valores nutricionais são ESTIMATIVAS e não substituem
    orientação de nutricionista.
    ============================================================ */
-
 'use strict';
-
 /* ================= CONFIGURAÇÃO ================= */
-
 const NUT_BANCO = {
   nome: 'itrainer-db',
-  // Revisão 3: garante a criação das stores do módulo (aditivo e
-  // idempotente) mesmo que o main.js só tenha subido a versão para 2.
   versao: 3,
   stores: ['perfil', 'metas', 'alimentos', 'registros', 'agua'],
 };
-
 const NUT_PREFIXO = 'itrainer-nut-';
 const NUT_VIEW_ID = 'view-nutricao';
-
 const REFEICOES = [
   { chave: 'cafe',   rotulo: 'Café' },
   { chave: 'almoco', rotulo: 'Almoço' },
   { chave: 'lanche', rotulo: 'Lanche' },
   { chave: 'jantar', rotulo: 'Jantar' },
 ];
-
 const MACROS = [
   { chave: 'kcal', rotulo: 'Calorias', unidade: 'kcal' },
   { chave: 'prot', rotulo: 'Proteína', unidade: 'g' },
   { chave: 'carb', rotulo: 'Carboidrato', unidade: 'g' },
   { chave: 'gord', rotulo: 'Gordura', unidade: 'g' },
 ];
-
 const METAS_PADRAO = { kcal: 2000, prot: 120, carb: 250, gord: 60 };
-const AGUA_REFERENCIA_ML = 2000; // referência fixa, não é meta configurável
-
+const AGUA_REFERENCIA_ML = 2000;
 const LIMITES = {
   qtd:            { min: 0.1, max: 99 },
   kcalPorcao:     { min: 0,   max: 5000 },
@@ -47,10 +37,7 @@ const LIMITES = {
   metaMacro:      { min: 0,   max: 2000 },
   agua:           { min: 0,   max: 15000 },
 };
-
-/* ================= BASE LOCAL DE ALIMENTOS (estimativas) =================
-   Valores POR PORÇÃO informada. Ajuste pela quantidade registrada no diário. */
-
+/* ================= BASE LOCAL DE ALIMENTOS (estimativas) ================= */
 const ALIMENTOS_PADRAO = [
   { id: 'padrao-arroz-branco',   nome: 'Arroz branco cozido',       porcao: '100 g',                           kcal: 128, prot: 2.5, carb: 28,  gord: 0.3 },
   { id: 'padrao-arroz-integral', nome: 'Arroz integral cozido',     porcao: '100 g',                           kcal: 124, prot: 2.6, carb: 26,  gord: 1.0 },
@@ -107,33 +94,39 @@ const ALIMENTOS_PADRAO = [
   { id: 'padrao-chocolate',      nome: 'Chocolate 70%',             porcao: '2 quadrados (20 g)',              kcal: 108, prot: 1.8, carb: 7.2, gord: 8.4 },
   { id: 'padrao-sorvete',        nome: 'Sorvete de creme',          porcao: '1 bola (60 g)',                   kcal: 126, prot: 2.1, carb: 14,  gord: 7.0 },
 ];
-
 /* ================= ESTADO ================= */
-
 let nutPronto = false;
-let nutView = 'diario';            // diario | historico | alimentos
-let nutHistAba = 'dias';           // dias | semana
-let nutBusca = '';                 // busca da tela de alimentos
-let nutAlimentos = {};             // id -> alimento (padrão + personalizados)
+let nutView = 'diario';
+let nutHistAba = 'dias';
+let nutBusca = '';
+let nutAlimentos = {};
 let nutMetas = Object.assign({}, METAS_PADRAO);
-let nutRegistros = {};             // 'AAAA-MM-DD' -> { cafe: [], almoco: [], lanche: [], jantar: [] }
-let nutAgua = {};                  // 'AAAA-MM-DD' -> ml
-let nutPerfil = {};                // reservado para TMB/TDEE (fase futura)
-let nutOverlayBusca = null;        // modal de busca aberto
-
+let nutRegistros = {};
+let nutAgua = {};
+let nutPerfil = {};
+let nutOverlayBusca = null;
 /* ================= PERSISTÊNCIA (IndexedDB + espelho localStorage) ================= */
-
 function nutLsGet(store) {
   try { return JSON.parse(localStorage.getItem(NUT_PREFIXO + store)); } catch (e) { return null; }
 }
-
 function nutLsPut(store, valor) {
   try { localStorage.setItem(NUT_PREFIXO + store, JSON.stringify(valor)); } catch (e) { /* quota */ }
 }
-
+/* CORREÇÃO: abre o banco com tempo limite e tratamento de bloqueio,
+   para a Promise NUNCA ficar pendente. Se falhar, cai no espelho localStorage. */
 function nutAbrirBanco() {
   return new Promise(function (resolve, reject) {
-    var req = indexedDB.open(NUT_BANCO.nome, NUT_BANCO.versao);
+    if (typeof indexedDB === 'undefined') { reject(new Error('sem-idb')); return; }
+    var req;
+    try {
+      req = indexedDB.open(NUT_BANCO.nome, NUT_BANCO.versao);
+    } catch (e) { reject(e); return; }
+    var feito = false;
+    var timer = setTimeout(function () {
+      if (!feito) { feito = true; reject(new Error('timeout-idb')); }
+    }, 2500);
+    function ok(db) { if (!feito) { feito = true; clearTimeout(timer); resolve(db); } }
+    function err(e) { if (!feito) { feito = true; clearTimeout(timer); reject(e); } }
     req.onupgradeneeded = function (ev) {
       var db = ev.target.result;
       NUT_BANCO.stores.forEach(function (nome) {
@@ -142,11 +135,11 @@ function nutAbrirBanco() {
         }
       });
     };
-    req.onsuccess = function () { resolve(req.result); };
-    req.onerror = function () { reject(req.error); };
+    req.onsuccess = function () { ok(req.result); };
+    req.onerror = function () { err(req.error); };
+    req.onblocked = function () { err(new Error('bloqueado')); };
   });
 }
-
 function nutDbGet(store) {
   return nutAbrirBanco().then(function (db) {
     return new Promise(function (resolve, reject) {
@@ -157,7 +150,6 @@ function nutDbGet(store) {
     });
   }).catch(function () { return nutLsGet(store); });
 }
-
 function nutDbPut(store, valor) {
   nutLsPut(store, valor);
   return nutAbrirBanco().then(function (db) {
@@ -169,7 +161,6 @@ function nutDbPut(store, valor) {
     });
   }).catch(function () { /* espelho já gravado */ });
 }
-
 async function nutCarregarDados() {
   var dados = await Promise.all([
     nutDbGet('alimentos'), nutDbGet('metas'),
@@ -184,11 +175,9 @@ async function nutCarregarDados() {
   nutPerfil = (dados[4] && typeof dados[4] === 'object') ? dados[4] : {};
   nutPronto = true;
 }
-
 function nutGarantirEstado() {
   return nutPronto ? Promise.resolve() : nutCarregarDados();
 }
-
 function nutAlimentosPessoais() {
   var out = {};
   Object.keys(nutAlimentos).forEach(function (id) {
@@ -196,30 +185,24 @@ function nutAlimentosPessoais() {
   });
   return out;
 }
-
 async function nutSalvarRegistros() { await nutDbPut('registros', nutRegistros); }
 async function nutSalvarMetas()     { await nutDbPut('metas', nutMetas); }
 async function nutSalvarAlimentos() { await nutDbPut('alimentos', nutAlimentosPessoais()); }
 async function nutSalvarAgua()      { await nutDbPut('agua', nutAgua); }
-
 /* ================= UTILITÁRIOS ================= */
-
 function nutHoje() {
   var d = new Date();
   var p = function (n) { return String(n).padStart(2, '0'); };
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
-
 function nutDataUtf(data) {
   var partes = data.split('-');
   return partes[2] + '/' + partes[1];
 }
-
 function nutDiaSemana(data) {
   var partes = data.split('-').map(Number);
   return new Date(partes[0], partes[1] - 1, partes[2]).getDay();
 }
-
 function nutNum(v, min, max) {
   var n = parseFloat(String(v).replace(',', '.'));
   if (isNaN(n)) return null;
@@ -227,26 +210,21 @@ function nutNum(v, min, max) {
   if (max !== undefined && n > max) return null;
   return Math.round(n * 100) / 100;
 }
-
 function nutClamp(v, min, max) {
   return Math.min(Math.max(v, min), max);
 }
-
 function nutFmt(n) {
   var v = Number(n) || 0;
   return Number.isInteger(v) ? String(v) : String(v.toFixed(1)).replace('.', ',');
 }
-
 function nutEsc(t) {
   return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
-
 function nutRefeicoesVazias() {
   return { cafe: [], almoco: [], lanche: [], jantar: [] };
 }
-
 function nutTotaisRefeicao(refeicao) {
   var total = { kcal: 0, prot: 0, carb: 0, gord: 0 };
   var reg = nutRegistros[nutHoje()] || {};
@@ -260,7 +238,6 @@ function nutTotaisRefeicao(refeicao) {
   });
   return total;
 }
-
 function nutTotaisDia(data) {
   var total = { kcal: 0, prot: 0, carb: 0, gord: 0 };
   var reg = nutRegistros[data] || {};
@@ -276,7 +253,6 @@ function nutTotaisDia(data) {
   });
   return total;
 }
-
 function nutListaDias(n) {
   var dias = [];
   var d, i;
@@ -288,10 +264,9 @@ function nutListaDias(n) {
   }
   return dias;
 }
-
 function nutSemanaAtual() {
   var hoje = new Date();
-  var offset = (hoje.getDay() + 6) % 7; // 0 = segunda-feira
+  var offset = (hoje.getDay() + 6) % 7;
   var seg = new Date(hoje);
   seg.setDate(hoje.getDate() - offset);
   var dias = [];
@@ -303,11 +278,8 @@ function nutSemanaAtual() {
   }
   return dias;
 }
-
 var DIAS_ROTULO = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
 /* ================= UI (design system do app) ================= */
-
 function nutToast(msg, erro) {
   var t = document.createElement('div');
   t.className = 'toast';
@@ -324,7 +296,6 @@ function nutToast(msg, erro) {
     setTimeout(function () { t.remove(); }, 300);
   }, 2600);
 }
-
 function nutCampo(o) {
   var tipo = o.tipo || 'number';
   var sufixo = o.sufixo ? '<span style="font:400 11px Inter,sans-serif;color:#9db38c;margin-left:8px">' + nutEsc(o.sufixo) + '</span>' : '';
@@ -341,7 +312,6 @@ function nutCampo(o) {
     '</label>'
   );
 }
-
 function nutAbrirModal(opcoes) {
   var overlay = document.createElement('div');
   overlay.className = 'modal';
@@ -358,9 +328,7 @@ function nutAbrirModal(opcoes) {
         (opcoes.rotuloOk ? '<button class="btn btn-primary" data-acao="ok" style="background:#c8f31d;color:#141807;border:none;border-radius:10px;padding:9px 18px;font:700 13px Inter,sans-serif;cursor:pointer">' + nutEsc(opcoes.rotuloOk) + '</button>' : '') +
       '</div>' +
     '</div>';
-
   function fechar() { overlay.remove(); if (overlay._onFechar) overlay._onFechar(); }
-
   overlay.querySelector('[data-acao="fechar"]').onclick = fechar;
   overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) fechar(); });
   if (opcoes.rotuloOk) {
@@ -369,9 +337,7 @@ function nutAbrirModal(opcoes) {
   document.body.appendChild(overlay);
   return overlay;
 }
-
 /* ================= BARRAS DE PROGRESSO ================= */
-
 function nutHtmlBarra(m, consumido, meta) {
   var acima = meta > 0 && consumido > meta;
   var pct = meta > 0 ? Math.min((consumido / meta) * 100, 100) : (consumido > 0 ? 100 : 0);
@@ -391,9 +357,7 @@ function nutHtmlBarra(m, consumido, meta) {
     '</div>'
   );
 }
-
 /* ================= VIEW: DIÁRIO ================= */
-
 function nutBanner() {
   return (
     '<div style="background:rgba(200,243,29,.08);border:1px solid rgba(200,243,29,.25);border-radius:14px;padding:10px 14px;' +
@@ -402,7 +366,6 @@ function nutBanner() {
     '</div>'
   );
 }
-
 function nutChip(view, rotulo) {
   var ativo = nutView === view;
   return (
@@ -414,7 +377,6 @@ function nutChip(view, rotulo) {
     rotulo + '</button>'
   );
 }
-
 function nutMiniNav() {
   return (
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">' +
@@ -423,7 +385,6 @@ function nutMiniNav() {
     '</div>'
   );
 }
-
 function nutHtmlResumo(total) {
   return (
     '<div style="background:#0e120a;border:1px solid #232b19;border-radius:16px;padding:16px">' +
@@ -435,7 +396,6 @@ function nutHtmlResumo(total) {
     '</div>'
   );
 }
-
 function nutHtmlItem(refeicao, item) {
   var a = nutAlimentos[item.id];
   var estiloBotao =
@@ -466,7 +426,6 @@ function nutHtmlItem(refeicao, item) {
     '</div>'
   );
 }
-
 function nutHtmlRefeicoes() {
   var reg = nutRegistros[nutHoje()] || nutRefeicoesVazias();
   return REFEICOES.map(function (r) {
@@ -487,7 +446,6 @@ function nutHtmlRefeicoes() {
     );
   }).join('');
 }
-
 function nutHtmlAgua() {
   var dia = nutHoje();
   var ml = nutAgua[dia] || 0;
@@ -516,9 +474,7 @@ function nutHtmlAgua() {
     '</div>'
   );
 }
-
 /* ================= VIEW: HISTÓRICO ================= */
-
 function nutTabelaHistorico(linhas, rodape) {
   var th = ['Dia', 'Kcal', 'Prot', 'Carb', 'Gord', 'Água'].map(function (h) {
     return '<th style="text-align:left;padding:8px 6px;border-bottom:1px solid #2c3422;color:#9db38c;font-weight:600;font-size:12px">' + h + '</th>';
@@ -533,7 +489,6 @@ function nutTabelaHistorico(linhas, rodape) {
     '</div>'
   );
 }
-
 function nutLinhaHistorico(rotulo, data, destaque) {
   var t = nutTotaisDia(data);
   var agua = nutAgua[data] || 0;
@@ -548,12 +503,10 @@ function nutLinhaHistorico(rotulo, data, destaque) {
     '</tr>'
   );
 }
-
 function nutHtmlHistorico() {
   var linhas = '';
   var rodape = '';
   var i;
-
   if (nutHistAba === 'semana') {
     var dias = nutSemanaAtual();
     var soma = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
@@ -592,7 +545,6 @@ function nutHtmlHistorico() {
         '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.agua / 7) + ' ml</td>' +
       '</tr>';
   }
-
   var chip = function (aba, rotulo) {
     var ativo = nutHistAba === aba;
     return '<button data-nut="hist-aba" data-aba="' + aba + '" class="chip" style="' +
@@ -601,7 +553,6 @@ function nutHtmlHistorico() {
       'color:' + (ativo ? '#141807' : '#c6d4b4') + ';' +
       'border-radius:999px;padding:7px 14px;font:600 13px Inter,sans-serif;cursor:pointer">' + rotulo + '</button>';
   };
-
   return (
     '<div style="padding:16px;max-width:520px;margin:0 auto">' +
       nutBanner() + nutMiniNav() +
@@ -610,16 +561,13 @@ function nutHtmlHistorico() {
     '</div>'
   );
 }
-
 /* ================= VIEW: ALIMENTOS ================= */
-
 function nutHtmlAlimentos() {
   var termo = nutBusca.toLowerCase();
   var lista = Object.keys(nutAlimentos)
     .map(function (id) { return nutAlimentos[id]; })
     .filter(function (a) { return !termo || a.nome.toLowerCase().indexOf(termo) !== -1; })
     .sort(function (a, b) { return a.nome.localeCompare(b.nome); });
-
   var linhas = lista.map(function (a) {
     var pessoal = a.id.indexOf('user-') === 0 || a.id.indexOf('import-') === 0;
     var badge = pessoal
@@ -639,7 +587,6 @@ function nutHtmlAlimentos() {
       '</div>'
     );
   }).join('');
-
   return (
     '<div style="padding:16px;max-width:520px;margin:0 auto">' +
       nutBanner() + nutMiniNav() +
@@ -652,9 +599,7 @@ function nutHtmlAlimentos() {
     '</div>'
   );
 }
-
 /* ================= MODAIS ================= */
-
 function nutModalAdicionar(refeicao) {
   var rotulo = REFEICOES.filter(function (r) { return r.chave === refeicao; })[0].rotulo;
   var overlay = nutAbrirModal({
@@ -672,7 +617,6 @@ function nutModalAdicionar(refeicao) {
   });
   nutRenderResultados(refeicao);
 }
-
 function nutRenderResultados(refeicao) {
   var caixa = document.getElementById('nut-busca-resultados');
   if (!caixa) return;
@@ -697,7 +641,6 @@ function nutRenderResultados(refeicao) {
     );
   }).join('') || '<div style="font:400 13px Inter,sans-serif;color:#5f6b52;padding:12px 0">Nenhum alimento encontrado.</div>';
 }
-
 function nutModalQuantidade(refeicao, id) {
   var item = ((nutRegistros[nutHoje()] || {})[refeicao] || []).filter(function (i) { return i.id === id; })[0];
   if (!item) return;
@@ -715,7 +658,6 @@ function nutModalQuantidade(refeicao, id) {
     },
   });
 }
-
 function nutModalMetas() {
   nutAbrirModal({
     titulo: 'Metas diárias',
@@ -742,7 +684,6 @@ function nutModalMetas() {
     },
   });
 }
-
 function nutModalAlimento(id) {
   var a = id ? nutAlimentos[id] : null;
   var corpo;
@@ -770,248 +711,6 @@ function nutModalAlimento(id) {
     onOk: function () { nutSalvarAlimentoModal(a ? a.id : null); },
   });
 }
-
 function nutSalvarAlimentoModal(id) {
   var nome = (document.getElementById('nut-f-nome').value || '').trim();
-  var porcao = (document.getElementById('nut-f-porcao').value || '').trim();
-  var kcal = nutNum(document.getElementById('nut-f-kcal').value, LIMITES.kcalPorcao.min, LIMITES.kcalPorcao.max);
-  var prot = nutNum(document.getElementById('nut-f-prot').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
-  var carb = nutNum(document.getElementById('nut-f-carb').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
-  var gord = nutNum(document.getElementById('nut-f-gord').value, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max);
-  if (!nome || !porcao) return nutToast('Preencha nome e porção.', true);
-  if (kcal === null || prot === null || carb === null || gord === null) {
-    return nutToast('Valores nutricionais inválidos — use números positivos.', true);
-  }
-  var novoId = id || 'user-' + Date.now();
-  nutAlimentos[novoId] = { id: novoId, nome: nome, porcao: porcao, kcal: kcal, prot: prot, carb: carb, gord: gord };
-  nutSalvarAlimentos().then(function () {
-    nutToast('Alimento salvo.');
-    nutRender();
-  });
-}
-
-function nutExcluirAlimento(id) {
-  if (!confirm('Excluir "' + nutAlimentos[id].nome + '" da sua lista?')) return;
-  delete nutAlimentos[id];
-  nutSalvarAlimentos().then(function () {
-    nutToast('Alimento excluído.');
-    nutRender();
-  });
-}
-
-/* ================= AÇÕES DO DIÁRIO ================= */
-
-function nutRegistrosHoje() {
-  var dia = nutHoje();
-  if (!nutRegistros[dia]) nutRegistros[dia] = nutRefeicoesVazias();
-  return nutRegistros[dia];
-}
-
-function nutAdicionarItem(refeicao, id) {
-  var input = document.getElementById('nut-qtd-' + id);
-  var qtd = nutNum(input ? input.value : 1, LIMITES.qtd.min, LIMITES.qtd.max);
-  if (qtd === null) return nutToast('Quantidade inválida.', true);
-  nutRegistrosHoje()[refeicao].push({ id: id, qtd: qtd });
-  if (nutOverlayBusca) { nutOverlayBusca.remove(); nutOverlayBusca = null; }
-  nutSalvarRegistros();
-  nutToast('Adicionado.');
-  nutRender();
-}
-
-function nutRemoverItem(refeicao, id) {
-  var lista = nutRegistrosHoje()[refeicao];
-  nutRegistrosHoje()[refeicao] = lista.filter(function (i) { return i.id !== id; });
-  nutSalvarRegistros();
-  nutRender();
-}
-
-function nutMudarQtd(refeicao, id, delta) {
-  var item = nutRegistrosHoje()[refeicao].filter(function (i) { return i.id === id; })[0];
-  if (!item) return;
-  var novo = nutClamp((item.qtd || 1) + delta, LIMITES.qtd.min, LIMITES.qtd.max);
-  if (novo < LIMITES.qtd.min) {
-    nutRemoverItem(refeicao, id);
-    return;
-  }
-  item.qtd = novo;
-  nutSalvarRegistros();
-  nutRender();
-}
-
-function nutEditarQtd(refeicao, id) { nutModalQuantidade(refeicao, id); }
-
-function nutMudarAgua(delta) {
-  var dia = nutHoje();
-  var atual = nutAgua[dia] || 0;
-  nutAgua[dia] = Math.round(nutClamp(atual + delta, LIMITES.agua.min, LIMITES.agua.max));
-  nutSalvarAgua();
-  nutRender();
-}
-
-function nutAguaCustom() {
-  var input = document.getElementById('nut-agua-input');
-  var ml = nutNum(input ? input.value : null, LIMITES.agua.min, LIMITES.agua.max);
-  if (ml === null) return nutToast('Valor de água inválido.', true);
-  var dia = nutHoje();
-  nutAgua[dia] = Math.round(nutClamp((nutAgua[dia] || 0) + ml, LIMITES.agua.min, LIMITES.agua.max));
-  if (input) input.value = '';
-  nutSalvarAgua();
-  nutRender();
-}
-
-/* ================= DELEGAÇÃO DE EVENTOS ================= */
-
-function nutCliqueView(ev) {
-  var alvo = ev.target.closest('[data-nut]');
-  if (!alvo) return;
-  var acao = alvo.dataset.nut;
-  var refeicao = alvo.dataset.refeicao || '';
-  var id = alvo.dataset.id || '';
-
-  switch (acao) {
-    case 'ver':             return ver(alvo.dataset.view);
-    case 'hist-aba':        nutHistAba = alvo.dataset.aba; return nutRender();
-    case 'add-refeicao':    return nutModalAdicionar(refeicao);
-    case 'add-alimento':    return nutAdicionarItem(refeicao, id);
-    case 'qtd-menos':       return nutMudarQtd(refeicao, id, -0.5);
-    case 'qtd-mais':        return nutMudarQtd(refeicao, id, 0.5);
-    case 'editar-qtd':      return nutEditarQtd(refeicao, id);
-    case 'remover-item':    return nutRemoverItem(refeicao, id);
-    case 'abrir-metas':     return nutModalMetas();
-    case 'novo-alimento':   return nutModalAlimento(null);
-    case 'editar-alimento': return nutModalAlimento(id);
-    case 'excluir-alimento':return nutExcluirAlimento(id);
-    case 'agua-menos':      return nutMudarAgua(-200);
-    case 'agua-mais-200':   return nutMudarAgua(200);
-    case 'agua-mais-500':   return nutMudarAgua(500);
-    case 'agua-ok':         return nutAguaCustom();
-  }
-}
-
-function nutInstalarListener() {
-  var c = document.getElementById(NUT_VIEW_ID);
-  if (!c || c.dataset.nutListener) return;
-  c.dataset.nutListener = '1';
-  c.addEventListener('click', nutCliqueView);
-}
-
-function nutRender() {
-  var c = document.getElementById(NUT_VIEW_ID);
-  if (!c) return;
-  nutInstalarListener();
-  if (nutView === 'historico') {
-    c.innerHTML = nutHtmlHistorico();
-  } else if (nutView === 'alimentos') {
-    c.innerHTML = nutHtmlAlimentos();
-    var busca = document.getElementById('nut-busca-alimentos');
-    if (busca) busca.addEventListener('input', function (e) { nutBusca = e.target.value; nutRender(); });
-  } else {
-    c.innerHTML =
-      '<div style="padding:16px;max-width:520px;margin:0 auto">' +
-        nutBanner() + nutMiniNav() +
-        '<div style="margin-top:16px">' + nutHtmlResumo(nutTotaisDia(nutHoje())) + '</div>' +
-        nutHtmlRefeicoes() +
-        nutHtmlAgua() +
-      '</div>';
-  }
-}
-
-/* ================= API PÚBLICA / INTEGRAÇÃO ================= */
-
-async function init() {
-  await nutGarantirEstado();
-  nutInstalarListener();
-  nutRender();
-}
-
-function ver(nome) {
-  nutView = ['diario', 'historico', 'alimentos'].indexOf(nome) !== -1 ? nome : 'diario';
-  nutGarantirEstado().then(nutRender);
-}
-
-// Backup: bloco nutrição para o JSON do main.js (export/import).
-function backupExtrair() {
-  return {
-    alimentos: nutAlimentosPessoais(),
-    metas: Object.assign({}, nutMetas),
-    registros: JSON.parse(JSON.stringify(nutRegistros)),
-    agua: JSON.parse(JSON.stringify(nutAgua)),
-  };
-}
-
-function backupAplicar(dados) {
-  if (!dados || typeof dados !== 'object') return false;
-
-  // Alimentos (só personalizados; sanitiza valores)
-  if (dados.alimentos && typeof dados.alimentos === 'object') {
-    Object.keys(dados.alimentos).forEach(function (id) {
-      var a = dados.alimentos[id];
-      if (!a || typeof a !== 'object' || !a.nome) return;
-      var novoId = id.indexOf('user-') === 0 ? id : 'import-' + Date.now() + '-' + id;
-      nutAlimentos[novoId] = {
-        id: novoId,
-        nome: String(a.nome).slice(0, 80),
-        porcao: String(a.porcao || '1 porção').slice(0, 60),
-        kcal: nutNum(a.kcal, LIMITES.kcalPorcao.min, LIMITES.kcalPorcao.max) || 0,
-        prot: nutNum(a.prot, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max) || 0,
-        carb: nutNum(a.carb, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max) || 0,
-        gord: nutNum(a.gord, LIMITES.macroPorcao.min, LIMITES.macroPorcao.max) || 0,
-      };
-    });
-  }
-
-  // Metas
-  if (dados.metas && typeof dados.metas === 'object') {
-    var m = dados.metas;
-    nutMetas = {
-      kcal: nutNum(m.kcal, LIMITES.metaKcal.min, LIMITES.metaKcal.max) == null ? METAS_PADRAO.kcal : nutNum(m.kcal, LIMITES.metaKcal.min, LIMITES.metaKcal.max),
-      prot: nutNum(m.prot, LIMITES.metaMacro.min, LIMITES.metaMacro.max) == null ? METAS_PADRAO.prot : nutNum(m.prot, LIMITES.metaMacro.min, LIMITES.metaMacro.max),
-      carb: nutNum(m.carb, LIMITES.metaMacro.min, LIMITES.metaMacro.max) == null ? METAS_PADRAO.carb : nutNum(m.carb, LIMITES.metaMacro.min, LIMITES.metaMacro.max),
-      gord: nutNum(m.gord, LIMITES.metaMacro.min, LIMITES.metaMacro.max) == null ? METAS_PADRAO.gord : nutNum(m.gord, LIMITES.metaMacro.min, LIMITES.metaMacro.max),
-    };
-  }
-
-  // Registros: mantém apenas datas e itens válidos
-  if (dados.registros && typeof dados.registros === 'object') {
-    var novosReg = {};
-    Object.keys(dados.registros).forEach(function (dia) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return;
-      var reg = dados.registros[dia] || {};
-      var limpo = {};
-      REFEICOES.forEach(function (r) {
-        limpo[r.chave] = (Array.isArray(reg[r.chave]) ? reg[r.chave] : []).filter(function (i) {
-          return i && typeof i.id === 'string' && nutNum(i.qtd, LIMITES.qtd.min, LIMITES.qtd.max) !== null;
-        }).map(function (i) {
-          return { id: i.id, qtd: nutNum(i.qtd, LIMITES.qtd.min, LIMITES.qtd.max) };
-        });
-      });
-      novosReg[dia] = limpo;
-    });
-    nutRegistros = novosReg;
-  }
-
-  // Água
-  if (dados.agua && typeof dados.agua === 'object') {
-    var novaAgua = {};
-    Object.keys(dados.agua).forEach(function (dia) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return;
-      var ml = nutNum(dados.agua[dia], LIMITES.agua.min, LIMITES.agua.max);
-      if (ml !== null) novaAgua[dia] = Math.round(ml);
-    });
-    nutAgua = novaAgua;
-  }
-
-  nutSalvarAlimentos();
-  nutSalvarMetas();
-  nutSalvarRegistros();
-  nutSalvarAgua();
-  nutPronto = true;
-  return true;
-}
-
-window.Nutricao = {
-  init: init,
-  ver: ver,
-  backupExtrair: backupExtrair,
-  backupAplicar: backupAplicar,
-};
+  var
