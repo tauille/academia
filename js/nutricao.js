@@ -151,14 +151,7 @@ async function nutCarregarDados() {
     nutDbGet('alimentos'), nutDbGet('metas'),
     nutDbGet('registros'), nutDbGet('agua'), nutDbGet('perfil'),
   ]);
-  nutAlimentos = {};
-  ALIMENTOS_PADRAO.forEach(function (a) { nutAlimentos[a.id] = a; });
-  if (dados[0] && typeof dados[0] === 'object') Object.assign(nutAlimentos, dados[0]);
-  nutMetas = Object.assign({}, METAS_PADRAO, dados[1] || {});
-  nutRegistros = (dados[2] && typeof dados[2] === 'object') ? dados[2] : {};
-  nutAgua = (dados[3] && typeof dados[3] === 'object') ? dados[3] : {};
-  nutPerfil = (dados[4] && typeof dados[4] === 'object') ? dados[4] : {};
-  nutPronto = true;
+  /* ... resto ... */
 }
 function nutGarantirEstado() {
   return nutPronto ? Promise.resolve() : nutCarregarDados();
