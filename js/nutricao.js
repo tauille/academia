@@ -1,18 +1,11 @@
 /* ============================================================
    iTrainer — Módulo Nutrição  (js/nutricao.js)
-   ------------------------------------------------------------
    Diário alimentar · Banco de alimentos · Metas · Água · Histórico
-   Dados 100% locais no aparelho (IndexedDB + espelho localStorage).
-   Valores nutricionais são ESTIMATIVAS e não substituem
-   orientação de nutricionista.
+   Dados 100% locais (IndexedDB + espelho localStorage).
+   Valores são ESTIMATIVAS e não substituem nutricionista.
    ============================================================ */
 'use strict';
-/* ================= CONFIGURAÇÃO ================= */
-const NUT_BANCO = {
-  nome: 'itrainer-db',
-  versao: 3,
-  stores: ['perfil', 'metas', 'alimentos', 'registros', 'agua'],
-};
+const NUT_BANCO = { nome: 'itrainer-db', versao: 3, stores: ['perfil', 'metas', 'alimentos', 'registros', 'agua'] };
 const NUT_PREFIXO = 'itrainer-nut-';
 const NUT_VIEW_ID = 'view-nutricao';
 const REFEICOES = [
@@ -30,71 +23,69 @@ const MACROS = [
 const METAS_PADRAO = { kcal: 2000, prot: 120, carb: 250, gord: 60 };
 const AGUA_REFERENCIA_ML = 2000;
 const LIMITES = {
-  qtd:            { min: 0.1, max: 99 },
-  kcalPorcao:     { min: 0,   max: 5000 },
-  macroPorcao:    { min: 0,   max: 1000 },
-  metaKcal:       { min: 0,   max: 20000 },
-  metaMacro:      { min: 0,   max: 2000 },
-  agua:           { min: 0,   max: 15000 },
+  qtd:         { min: 0.1, max: 99 },
+  kcalPorcao:  { min: 0,   max: 5000 },
+  macroPorcao: { min: 0,   max: 1000 },
+  metaKcal:    { min: 0,   max: 20000 },
+  metaMacro:   { min: 0,   max: 2000 },
+  agua:        { min: 0,   max: 15000 },
 };
-/* ================= BASE LOCAL DE ALIMENTOS (estimativas) ================= */
 const ALIMENTOS_PADRAO = [
-  { id: 'padrao-arroz-branco',   nome: 'Arroz branco cozido',       porcao: '100 g',                           kcal: 128, prot: 2.5, carb: 28,  gord: 0.3 },
-  { id: 'padrao-arroz-integral', nome: 'Arroz integral cozido',     porcao: '100 g',                           kcal: 124, prot: 2.6, carb: 26,  gord: 1.0 },
-  { id: 'padrao-feijao',         nome: 'Feijão carioca cozido',     porcao: '1 concha (86 g)',                 kcal: 76,  prot: 4.8, carb: 13.6, gord: 0.5 },
-  { id: 'padrao-lentilha',       nome: 'Lentilha cozida',           porcao: '100 g',                           kcal: 116, prot: 8.9, carb: 18,  gord: 0.5 },
-  { id: 'padrao-grao-de-bico',   nome: 'Grão-de-bico cozido',       porcao: '100 g',                           kcal: 139, prot: 7.6, carb: 22,  gord: 2.2 },
-  { id: 'padrao-batata',         nome: 'Batata cozida',             porcao: '100 g',                           kcal: 80,  prot: 1.9, carb: 18,  gord: 0.1 },
-  { id: 'padrao-batata-doce',    nome: 'Batata doce cozida',        porcao: '100 g',                           kcal: 86,  prot: 1.6, carb: 20,  gord: 0.1 },
-  { id: 'padrao-macarrao',       nome: 'Macarrão cozido',           porcao: '100 g',                           kcal: 131, prot: 5.0, carb: 26,  gord: 0.5 },
-  { id: 'padrao-tapioca',        nome: 'Tapioca',                   porcao: '100 g',                           kcal: 130, prot: 0.2, carb: 31,  gord: 0.4 },
-  { id: 'padrao-aveia',          nome: 'Aveia em flocos',           porcao: '3 col. sopa (30 g)',              kcal: 117, prot: 4.5, carb: 19,  gord: 2.1 },
-  { id: 'padrao-pao-frances',    nome: 'Pão francês',               porcao: '1 unid (50 g)',                   kcal: 137, prot: 4.5, carb: 26,  gord: 1.6 },
-  { id: 'padrao-pao-integral',   nome: 'Pão de forma integral',     porcao: '1 fatia (25 g)',                  kcal: 60,  prot: 3.0, carb: 10,  gord: 1.2 },
-  { id: 'padrao-pao-queijo',     nome: 'Pão de queijo',             porcao: '1 unid (25 g)',                   kcal: 79,  prot: 1.9, carb: 8.6, gord: 4.0 },
-  { id: 'padrao-frango',         nome: 'Peito de frango grelhado',  porcao: '100 g',                           kcal: 165, prot: 31,  carb: 0,   gord: 3.6 },
-  { id: 'padrao-bife',           nome: 'Bife bovino grelhado',      porcao: '100 g',                           kcal: 219, prot: 26,  carb: 0,   gord: 12 },
-  { id: 'padrao-carne-moida',    nome: 'Carne moída refogada',      porcao: '100 g',                           kcal: 205, prot: 22,  carb: 0,   gord: 12 },
-  { id: 'padrao-ovo',            nome: 'Ovo cozido',                porcao: '1 unid (50 g)',                   kcal: 78,  prot: 6.3, carb: 0.6, gord: 5.3 },
-  { id: 'padrao-omelete',        nome: 'Omelete (1 ovo)',           porcao: '1 unid',                          kcal: 98,  prot: 6.8, carb: 0.7, gord: 7.5 },
-  { id: 'padrao-salmao',         nome: 'Salmão grelhado',           porcao: '100 g',                           kcal: 176, prot: 25,  carb: 0,   gord: 8.2 },
-  { id: 'padrao-atum',           nome: 'Atum em lata (drenado)',    porcao: '1 lata (120 g)',                  kcal: 120, prot: 27,  carb: 0,   gord: 1.2 },
-  { id: 'padrao-camarao',        nome: 'Camarão cozido',            porcao: '100 g',                           kcal: 81,  prot: 17,  carb: 0.2, gord: 0.9 },
-  { id: 'padrao-tofu',           nome: 'Tofu',                      porcao: '100 g',                           kcal: 76,  prot: 8.0, carb: 1.9, gord: 4.2 },
-  { id: 'padrao-leite-integral', nome: 'Leite integral',            porcao: '1 copo (200 ml)',                 kcal: 122, prot: 6.2, carb: 9.4, gord: 6.6 },
-  { id: 'padrao-leite-desn',     nome: 'Leite desnatado',           porcao: '1 copo (200 ml)',                 kcal: 70,  prot: 6.4, carb: 10,  gord: 0.4 },
-  { id: 'padrao-iogurte',        nome: 'Iogurte natural',           porcao: '1 pote (170 g)',                  kcal: 105, prot: 5.7, carb: 9.5, gord: 4.6 },
-  { id: 'padrao-minas',          nome: 'Queijo minas frescal',      porcao: '1 fatia (30 g)',                  kcal: 76,  prot: 5.4, carb: 1.0, gord: 5.8 },
-  { id: 'padrao-mussarela',      nome: 'Queijo mussarela',          porcao: '1 fatia (30 g)',                  kcal: 90,  prot: 6.6, carb: 0.8, gord: 6.7 },
-  { id: 'padrao-peru',           nome: 'Peito de peru fatiado',     porcao: '1 fatia (15 g)',                  kcal: 25,  prot: 4.6, carb: 0.4, gord: 0.5 },
-  { id: 'padrao-whey',           nome: 'Whey protein',              porcao: '1 scoop (30 g)',                  kcal: 120, prot: 24,  carb: 3.0, gord: 1.5 },
-  { id: 'padrao-banana',         nome: 'Banana',                    porcao: '1 unid (100 g)',                  kcal: 92,  prot: 1.4, carb: 21,  gord: 0.3 },
-  { id: 'padrao-maca',           nome: 'Maçã',                      porcao: '1 unid (130 g)',                  kcal: 68,  prot: 0.3, carb: 18,  gord: 0.1 },
-  { id: 'padrao-pera',           nome: 'Pêra',                      porcao: '1 unid (130 g)',                  kcal: 74,  prot: 0.6, carb: 20,  gord: 0.2 },
-  { id: 'padrao-mamao',          nome: 'Mamão',                     porcao: '1 fatia (150 g)',                 kcal: 65,  prot: 0.8, carb: 17,  gord: 0.3 },
-  { id: 'padrao-abacaxi',        nome: 'Abacaxi',                   porcao: '1 fatia (100 g)',                 kcal: 48,  prot: 0.5, carb: 12,  gord: 0.1 },
-  { id: 'padrao-manga',          nome: 'Manga',                     porcao: '1 unid (150 g)',                  kcal: 89,  prot: 1.2, carb: 21,  gord: 0.5 },
-  { id: 'padrao-melancia',       nome: 'Melancia',                  porcao: '1 fatia (200 g)',                 kcal: 60,  prot: 1.2, carb: 15,  gord: 0.4 },
-  { id: 'padrao-morango',        nome: 'Morango',                   porcao: '100 g',                           kcal: 30,  prot: 0.9, carb: 6.9, gord: 0.3 },
-  { id: 'padrao-uva',            nome: 'Uva',                       porcao: '100 g',                           kcal: 53,  prot: 0.6, carb: 13,  gord: 0.3 },
-  { id: 'padrao-abacate',        nome: 'Abacate',                   porcao: '1/2 unid (85 g)',                 kcal: 82,  prot: 1.0, carb: 5.0, gord: 7.1 },
-  { id: 'padrao-azeite',         nome: 'Azeite de oliva',           porcao: '1 col. sopa (13 g)',              kcal: 108, prot: 0,   carb: 0,   gord: 12 },
-  { id: 'padrao-amendoim',       nome: 'Amendoim torrado',          porcao: '30 g',                            kcal: 170, prot: 7.6, carb: 5.0, gord: 14.4 },
-  { id: 'padrao-castanha',       nome: 'Castanha-do-pará',          porcao: '1 unid (5 g)',                    kcal: 33,  prot: 0.7, carb: 0.6, gord: 3.3 },
-  { id: 'padrao-pasta-amendoim', nome: 'Pasta de amendoim',         porcao: '1 col. sopa (20 g)',              kcal: 119, prot: 5.4, carb: 4.4, gord: 9.4 },
-  { id: 'padrao-granola',        nome: 'Granola',                   porcao: '30 g',                            kcal: 120, prot: 3.0, carb: 18,  gord: 4.0 },
-  { id: 'padrao-mel',            nome: 'Mel',                       porcao: '1 col. sopa (20 g)',              kcal: 61,  prot: 0,   carb: 17,  gord: 0 },
-  { id: 'padrao-brocolis',       nome: 'Brócolis cozido',           porcao: '100 g',                           kcal: 31,  prot: 2.6, carb: 5.0, gord: 0.3 },
-  { id: 'padrao-cenoura',        nome: 'Cenoura cozida',            porcao: '100 g',                           kcal: 33,  prot: 0.8, carb: 7.2, gord: 0.2 },
-  { id: 'padrao-couve',          nome: 'Couve refogada',            porcao: '100 g',                           kcal: 60,  prot: 2.6, carb: 5.0, gord: 3.5 },
-  { id: 'padrao-tomate',         nome: 'Tomate',                    porcao: '1 unid (120 g)',                  kcal: 22,  prot: 1.1, carb: 4.7, gord: 0.2 },
-  { id: 'padrao-alface',         nome: 'Alface',                    porcao: '100 g',                           kcal: 15,  prot: 1.3, carb: 2.4, gord: 0.2 },
-  { id: 'padrao-suco-laranja',   nome: 'Suco de laranja',           porcao: '1 copo (200 ml)',                 kcal: 88,  prot: 1.7, carb: 20,  gord: 0.4 },
-  { id: 'padrao-acai',           nome: 'Açaí (polpa)',              porcao: '100 g',                           kcal: 62,  prot: 0.9, carb: 13,  gord: 0.6 },
-  { id: 'padrao-chocolate',      nome: 'Chocolate 70%',             porcao: '2 quadrados (20 g)',              kcal: 108, prot: 1.8, carb: 7.2, gord: 8.4 },
-  { id: 'padrao-sorvete',        nome: 'Sorvete de creme',          porcao: '1 bola (60 g)',                   kcal: 126, prot: 2.1, carb: 14,  gord: 7.0 },
+  { id: 'padrao-arroz-branco',   nome: 'Arroz branco cozido',     porcao: '100 g',         kcal: 128, prot: 2.5, carb: 28,  gord: 0.3 },
+  { id: 'padrao-arroz-integral', nome: 'Arroz integral cozido',   porcao: '100 g',         kcal: 124, prot: 2.6, carb: 26,  gord: 1.0 },
+  { id: 'padrao-feijao',         nome: 'Feijão carioca cozido',   porcao: '1 concha (86 g)',kcal: 76,  prot: 4.8, carb: 13.6, gord: 0.5 },
+  { id: 'padrao-lentilha',       nome: 'Lentilha cozida',         porcao: '100 g',         kcal: 116, prot: 8.9, carb: 18,  gord: 0.5 },
+  { id: 'padrao-grao-de-bico',   nome: 'Grão-de-bico cozido',     porcao: '100 g',         kcal: 139, prot: 7.6, carb: 22,  gord: 2.2 },
+  { id: 'padrao-batata',         nome: 'Batata cozida',           porcao: '100 g',         kcal: 80,  prot: 1.9, carb: 18,  gord: 0.1 },
+  { id: 'padrao-batata-doce',    nome: 'Batata doce cozida',      porcao: '100 g',         kcal: 86,  prot: 1.6, carb: 20,  gord: 0.1 },
+  { id: 'padrao-macarrao',       nome: 'Macarrão cozido',         porcao: '100 g',         kcal: 131, prot: 5.0, carb: 26,  gord: 0.5 },
+  { id: 'padrao-tapioca',        nome: 'Tapioca',                 porcao: '100 g',         kcal: 130, prot: 0.2, carb: 31,  gord: 0.4 },
+  { id: 'padrao-aveia',          nome: 'Aveia em flocos',         porcao: '3 col. sopa (30 g)', kcal: 117, prot: 4.5, carb: 19, gord: 2.1 },
+  { id: 'padrao-pao-frances',    nome: 'Pão francês',             porcao: '1 unid (50 g)',  kcal: 137, prot: 4.5, carb: 26,  gord: 1.6 },
+  { id: 'padrao-pao-integral',   nome: 'Pão de forma integral',   porcao: '1 fatia (25 g)', kcal: 60,  prot: 3.0, carb: 10,  gord: 1.2 },
+  { id: 'padrao-pao-queijo',     nome: 'Pão de queijo',           porcao: '1 unid (25 g)',  kcal: 79,  prot: 1.9, carb: 8.6, gord: 4.0 },
+  { id: 'padrao-frango',         nome: 'Peito de frango grelhado',porcao: '100 g',         kcal: 165, prot: 31,  carb: 0,   gord: 3.6 },
+  { id: 'padrao-bife',           nome: 'Bife bovino grelhado',    porcao: '100 g',         kcal: 219, prot: 26,  carb: 0,   gord: 12 },
+  { id: 'padrao-carne-moida',    nome: 'Carne moída refogada',    porcao: '100 g',         kcal: 205, prot: 22,  carb: 0,   gord: 12 },
+  { id: 'padrao-ovo',            nome: 'Ovo cozido',              porcao: '1 unid (50 g)',  kcal: 78,  prot: 6.3, carb: 0.6, gord: 5.3 },
+  { id: 'padrao-omelete',        nome: 'Omelete (1 ovo)',         porcao: '1 unid',        kcal: 98,  prot: 6.8, carb: 0.7, gord: 7.5 },
+  { id: 'padrao-salmao',         nome: 'Salmão grelhado',         porcao: '100 g',         kcal: 176, prot: 25,  carb: 0,   gord: 8.2 },
+  { id: 'padrao-atum',           nome: 'Atum em lata (drenado)',  porcao: '1 lata (120 g)', kcal: 120, prot: 27,  carb: 0,   gord: 1.2 },
+  { id: 'padrao-camarao',        nome: 'Camarão cozido',          porcao: '100 g',         kcal: 81,  prot: 17,  carb: 0.2, gord: 0.9 },
+  { id: 'padrao-tofu',           nome: 'Tofu',                    porcao: '100 g',         kcal: 76,  prot: 8.0, carb: 1.9, gord: 4.2 },
+  { id: 'padrao-leite-integral', nome: 'Leite integral',          porcao: '1 copo (200 ml)',kcal: 122, prot: 6.2, carb: 9.4, gord: 6.6 },
+  { id: 'padrao-leite-desn',     nome: 'Leite desnatado',         porcao: '1 copo (200 ml)',kcal: 70,  prot: 6.4, carb: 10,  gord: 0.4 },
+  { id: 'padrao-iogurte',        nome: 'Iogurte natural',         porcao: '1 pote (170 g)', kcal: 105, prot: 5.7, carb: 9.5, gord: 4.6 },
+  { id: 'padrao-minas',          nome: 'Queijo minas frescal',    porcao: '1 fatia (30 g)', kcal: 76,  prot: 5.4, carb: 1.0, gord: 5.8 },
+  { id: 'padrao-mussarela',      nome: 'Queijo mussarela',        porcao: '1 fatia (30 g)', kcal: 90,  prot: 6.6, carb: 0.8, gord: 6.7 },
+  { id: 'padrao-peru',           nome: 'Peito de peru fatiado',   porcao: '1 fatia (15 g)', kcal: 25,  prot: 4.6, carb: 0.4, gord: 0.5 },
+  { id: 'padrao-whey',           nome: 'Whey protein',            porcao: '1 scoop (30 g)', kcal: 120, prot: 24,  carb: 3.0, gord: 1.5 },
+  { id: 'padrao-banana',         nome: 'Banana',                  porcao: '1 unid (100 g)', kcal: 92,  prot: 1.4, carb: 21,  gord: 0.3 },
+  { id: 'padrao-maca',           nome: 'Maçã',                    porcao: '1 unid (130 g)', kcal: 68,  prot: 0.3, carb: 18,  gord: 0.1 },
+  { id: 'padrao-pera',           nome: 'Pêra',                    porcao: '1 unid (130 g)', kcal: 74,  prot: 0.6, carb: 20,  gord: 0.2 },
+  { id: 'padrao-mamao',          nome: 'Mamão',                   porcao: '1 fatia (150 g)',kcal: 65,  prot: 0.8, carb: 17,  gord: 0.3 },
+  { id: 'padrao-abacaxi',        nome: 'Abacaxi',                 porcao: '1 fatia (100 g)',kcal: 48,  prot: 0.5, carb: 12,  gord: 0.1 },
+  { id: 'padrao-manga',          nome: 'Manga',                   porcao: '1 unid (150 g)', kcal: 89,  prot: 1.2, carb: 21,  gord: 0.5 },
+  { id: 'padrao-melancia',       nome: 'Melancia',                porcao: '1 fatia (200 g)',kcal: 60,  prot: 1.2, carb: 15,  gord: 0.4 },
+  { id: 'padrao-morango',        nome: 'Morango',                 porcao: '100 g',         kcal: 30,  prot: 0.9, carb: 6.9, gord: 0.3 },
+  { id: 'padrao-uva',            nome: 'Uva',                     porcao: '100 g',         kcal: 53,  prot: 0.6, carb: 13,  gord: 0.3 },
+  { id: 'padrao-abacate',        nome: 'Abacate',                 porcao: '1/2 unid (85 g)',kcal: 82,  prot: 1.0, carb: 5.0, gord: 7.1 },
+  { id: 'padrao-azeite',         nome: 'Azeite de oliva',         porcao: '1 col. sopa (13 g)', kcal: 108, prot: 0, carb: 0, gord: 12 },
+  { id: 'padrao-amendoim',       nome: 'Amendoim torrado',        porcao: '30 g',          kcal: 170, prot: 7.6, carb: 5.0, gord: 14.4 },
+  { id: 'padrao-castanha',       nome: 'Castanha-do-pará',        porcao: '1 unid (5 g)',   kcal: 33,  prot: 0.7, carb: 0.6, gord: 3.3 },
+  { id: 'padrao-pasta-amendoim', nome: 'Pasta de amendoim',       porcao: '1 col. sopa (20 g)', kcal: 119, prot: 5.4, carb: 4.4, gord: 9.4 },
+  { id: 'padrao-granola',        nome: 'Granola',                 porcao: '30 g',          kcal: 120, prot: 3.0, carb: 18,  gord: 4.0 },
+  { id: 'padrao-mel',            nome: 'Mel',                     porcao: '1 col. sopa (20 g)', kcal: 61, prot: 0, carb: 17, gord: 0 },
+  { id: 'padrao-brocolis',       nome: 'Brócolis cozido',         porcao: '100 g',         kcal: 31,  prot: 2.6, carb: 5.0, gord: 0.3 },
+  { id: 'padrao-cenoura',        nome: 'Cenoura cozida',          porcao: '100 g',         kcal: 33,  prot: 0.8, carb: 7.2, gord: 0.2 },
+  { id: 'padrao-couve',          nome: 'Couve refogada',          porcao: '100 g',         kcal: 60,  prot: 2.6, carb: 5.0, gord: 3.5 },
+  { id: 'padrao-tomate',         nome: 'Tomate',                  porcao: '1 unid (120 g)', kcal: 22,  prot: 1.1, carb: 4.7, gord: 0.2 },
+  { id: 'padrao-alface',         nome: 'Alface',                  porcao: '100 g',         kcal: 15,  prot: 1.3, carb: 2.4, gord: 0.2 },
+  { id: 'padrao-suco-laranja',   nome: 'Suco de laranja',         porcao: '1 copo (200 ml)',kcal: 88,  prot: 1.7, carb: 20,  gord: 0.4 },
+  { id: 'padrao-acai',           nome: 'Açaí (polpa)',            porcao: '100 g',         kcal: 62,  prot: 0.9, carb: 13,  gord: 0.6 },
+  { id: 'padrao-chocolate',      nome: 'Chocolate 70%',           porcao: '2 quadrados (20 g)', kcal: 108, prot: 1.8, carb: 7.2, gord: 8.4 },
+  { id: 'padrao-sorvete',        nome: 'Sorvete de creme',        porcao: '1 bola (60 g)',  kcal: 126, prot: 2.1, carb: 14,  gord: 7.0 },
 ];
-/* ================= ESTADO ================= */
 let nutPronto = false;
 let nutView = 'diario';
 let nutHistAba = 'dias';
@@ -105,15 +96,12 @@ let nutRegistros = {};
 let nutAgua = {};
 let nutPerfil = {};
 let nutOverlayBusca = null;
-/* ================= PERSISTÊNCIA (IndexedDB + espelho localStorage) ================= */
 function nutLsGet(store) {
   try { return JSON.parse(localStorage.getItem(NUT_PREFIXO + store)); } catch (e) { return null; }
 }
 function nutLsPut(store, valor) {
-  try { localStorage.setItem(NUT_PREFIXO + store, JSON.stringify(valor)); } catch (e) { /* quota */ }
+  try { localStorage.setItem(NUT_PREFIXO + store, JSON.stringify(valor)); } catch (e) {}
 }
-/* CORREÇÃO: abre o banco com tempo limite e tratamento de bloqueio,
-   para a Promise NUNCA ficar pendente. Se falhar, cai no espelho localStorage. */
 function nutAbrirBanco() {
   return new Promise(function (resolve, reject) {
     if (typeof indexedDB === 'undefined') { reject(new Error('sem-idb')); return; }
@@ -129,9 +117,7 @@ function nutAbrirBanco() {
     req.onupgradeneeded = function (ev) {
       var db = ev.target.result;
       NUT_BANCO.stores.forEach(function (nome) {
-        if (!db.objectStoreNames.contains(nome)) {
-          db.createObjectStore(nome, { keyPath: 'chave' });
-        }
+        if (!db.objectStoreNames.contains(nome)) db.createObjectStore(nome, { keyPath: 'chave' });
       });
     };
     req.onsuccess = function () { ok(req.result); };
@@ -158,7 +144,7 @@ function nutDbPut(store, valor) {
       tx.oncomplete = function () { resolve(); };
       tx.onerror = function () { reject(tx.error); };
     });
-  }).catch(function () { /* espelho já gravado */ });
+  }).catch(function () {});
 }
 async function nutCarregarDados() {
   var dados = await Promise.all([
@@ -188,7 +174,6 @@ async function nutSalvarRegistros() { await nutDbPut('registros', nutRegistros);
 async function nutSalvarMetas()     { await nutDbPut('metas', nutMetas); }
 async function nutSalvarAlimentos() { await nutDbPut('alimentos', nutAlimentosPessoais()); }
 async function nutSalvarAgua()      { await nutDbPut('agua', nutAgua); }
-/* ================= UTILITÁRIOS ================= */
 function nutHoje() {
   var d = new Date();
   var p = function (n) { return String(n).padStart(2, '0'); };
@@ -198,10 +183,6 @@ function nutDataUtf(data) {
   var partes = data.split('-');
   return partes[2] + '/' + partes[1];
 }
-function nutDiaSemana(data) {
-  var partes = data.split('-').map(Number);
-  return new Date(partes[0], partes[1] - 1, partes[2]).getDay();
-}
 function nutNum(v, min, max) {
   var n = parseFloat(String(v).replace(',', '.'));
   if (isNaN(n)) return null;
@@ -209,9 +190,7 @@ function nutNum(v, min, max) {
   if (max !== undefined && n > max) return null;
   return Math.round(n * 100) / 100;
 }
-function nutClamp(v, min, max) {
-  return Math.min(Math.max(v, min), max);
-}
+function nutClamp(v, min, max) { return Math.min(Math.max(v, min), max); }
 function nutFmt(n) {
   var v = Number(n) || 0;
   return Number.isInteger(v) ? String(v) : String(v.toFixed(1)).replace('.', ',');
@@ -221,9 +200,7 @@ function nutEsc(t) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
-function nutRefeicoesVazias() {
-  return { cafe: [], almoco: [], lanche: [], jantar: [] };
-}
+function nutRefeicoesVazias() { return { cafe: [], almoco: [], lanche: [], jantar: [] }; }
 function nutTotaisRefeicao(refeicao) {
   var total = { kcal: 0, prot: 0, carb: 0, gord: 0 };
   var reg = nutRegistros[nutHoje()] || {};
@@ -505,7 +482,6 @@ function nutLinhaHistorico(rotulo, data, destaque) {
 function nutHtmlHistorico() {
   var linhas = '';
   var rodape = '';
-  var i;
   if (nutHistAba === 'semana') {
     var dias = nutSemanaAtual();
     var soma = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
@@ -665,7 +641,7 @@ function nutModalMetas() {
       nutCampo({ rotulo: 'Proteína',        id: 'nut-meta-prot', valor: nutMetas.prot, sufixo: 'g/dia' }) +
       nutCampo({ rotulo: 'Carboidrato',     id: 'nut-meta-carb', valor: nutMetas.carb, sufixo: 'g/dia' }) +
       nutCampo({ rotulo: 'Gordura',         id: 'nut-meta-gord', valor: nutMetas.gord, sufixo: 'g/dia' }) +
-      '<div style="font:400 11px/1.5 Inter,sans-serif;color:#5f6b52">Ajuste os valores com orientação profissional. Referência inicial: ' +
+      '<div style="font:400 11px/1.5 Inter,sans-serif;color:#5f6b52">Ajuste com orientação profissional. Referência: ' +
       METAS_PADRAO.kcal + ' kcal, ' + METAS_PADRAO.prot + ' g proteína, ' + METAS_PADRAO.carb + ' g carboidrato, ' + METAS_PADRAO.gord + ' g gordura.</div>',
     rotuloOk: 'Salvar',
     onOk: function () {
@@ -674,7 +650,7 @@ function nutModalMetas() {
       var carb = nutNum(document.getElementById('nut-meta-carb').value, LIMITES.metaMacro.min, LIMITES.metaMacro.max);
       var gord = nutNum(document.getElementById('nut-meta-gord').value, LIMITES.metaMacro.min, LIMITES.metaMacro.max);
       if (kcal === null || prot === null || carb === null || gord === null) {
-        return nutToast('Valores inválidos — use números dentro dos limites permitidos.', true);
+        return nutToast('Valores inválidos — use números dentro dos limites.', true);
       }
       nutMetas = { kcal: kcal, prot: prot, carb: carb, gord: gord };
       nutSalvarMetas();
@@ -768,4 +744,128 @@ function nutAdicionarAlimento(refeicao, id) {
   if (nutOverlayBusca) { nutOverlayBusca.remove(); nutOverlayBusca = null; }
   nutRender();
   var rotulo = '';
-  REFEICOES.forEach(function (r) { if (r.chave === refeicao) rotulo =
+  REFEICOES.forEach(function (r) { if (r.chave === refeicao) rotulo = r.rotulo; });
+  nutToast('Adicionado ao ' + rotulo + '.');
+}
+function nutMudarQtd(refeicao, id, delta) {
+  var hoje = nutHoje();
+  var lista = (nutRegistros[hoje] || {})[refeicao] || [];
+  var item = null;
+  for (var i = 0; i < lista.length; i++) { if (lista[i].id === id) { item = lista[i]; break; } }
+  if (!item) return;
+  item.qtd = Math.round((item.qtd + delta) * 100) / 100;
+  if (item.qtd <= 0) {
+    if (!nutRegistros[hoje]) nutRegistros[hoje] = nutRefeicoesVazias();
+    nutRegistros[hoje][refeicao] = lista.filter(function (x) { return x.id !== id; });
+  }
+  nutSalvarRegistros();
+  nutRender();
+}
+function nutRemoverItem(refeicao, id) {
+  var hoje = nutHoje();
+  if (!nutRegistros[hoje] || !nutRegistros[hoje][refeicao]) return;
+  nutRegistros[hoje][refeicao] = nutRegistros[hoje][refeicao].filter(function (x) { return x.id !== id; });
+  nutSalvarRegistros();
+  nutRender();
+}
+function nutMudarAgua(delta) {
+  var hoje = nutHoje();
+  nutAgua[hoje] = nutClamp((nutAgua[hoje] || 0) + delta, LIMITES.agua.min, LIMITES.agua.max);
+  nutSalvarAgua();
+  nutRender();
+}
+function nutSetarAgua() {
+  var input = document.getElementById('nut-agua-input');
+  if (!input) return;
+  var v = nutNum(input.value, LIMITES.agua.min, LIMITES.agua.max);
+  if (v === null) { nutToast('Valor de água inválido.', true); return; }
+  nutAgua[nutHoje()] = v;
+  nutSalvarAgua();
+  nutRender();
+}
+function nutExcluirAlimento(id) {
+  if (!nutAlimentos[id]) return;
+  delete nutAlimentos[id];
+  nutSalvarAlimentos();
+  nutToast('Alimento excluído.');
+  nutRender();
+}
+/* ================= CLIQUE (delegação) ================= */
+function nutCliqueView(ev) {
+  var alvo = ev.target && ev.target.closest ? ev.target.closest('[data-nut]') : null;
+  if (!alvo) return;
+  var acao = alvo.getAttribute('data-nut');
+  var refeicao = alvo.getAttribute('data-refeicao');
+  var id = alvo.getAttribute('data-id');
+  var view = alvo.getAttribute('data-view');
+  var aba = alvo.getAttribute('data-aba');
+  switch (acao) {
+    case 'ver': ver(view); break;
+    case 'abrir-metas': nutModalMetas(); break;
+    case 'add-refeicao': nutModalAdicionar(refeicao); break;
+    case 'add-alimento': nutAdicionarAlimento(refeicao, id); break;
+    case 'qtd-mais': nutMudarQtd(refeicao, id, 1); break;
+    case 'qtd-menos': nutMudarQtd(refeicao, id, -1); break;
+    case 'editar-qtd': nutModalQuantidade(refeicao, id); break;
+    case 'remover-item': nutRemoverItem(refeicao, id); break;
+    case 'agua-mais-200': nutMudarAgua(200); break;
+    case 'agua-mais-500': nutMudarAgua(500); break;
+    case 'agua-menos': nutMudarAgua(-200); break;
+    case 'agua-ok': nutSetarAgua(); break;
+    case 'hist-aba': nutHistAba = aba; nutRender(); break;
+    case 'novo-alimento': nutModalAlimento(null); break;
+    case 'editar-alimento': nutModalAlimento(id); break;
+    case 'excluir-alimento': nutExcluirAlimento(id); break;
+  }
+}
+/* ================= BACKUP ================= */
+function nutBackupExtrair() {
+  return {
+    versao: 1,
+    geradoEm: new Date().toISOString(),
+    alimentos: nutAlimentosPessoais(),
+    metas: nutMetas,
+    registros: nutRegistros,
+    agua: nutAgua,
+    perfil: nutPerfil,
+  };
+}
+function nutBackupAplicar(dados) {
+  if (!dados || typeof dados !== 'object') throw new Error('backup-invalido');
+  if (dados.metas && typeof dados.metas === 'object') {
+    nutMetas = Object.assign({}, METAS_PADRAO, dados.metas);
+    nutSalvarMetas();
+  }
+  if (dados.alimentos && typeof dados.alimentos === 'object') {
+    Object.keys(dados.alimentos).forEach(function (id) {
+      if (id.indexOf('user-') === 0 || id.indexOf('import-') === 0) {
+        nutAlimentos[id] = dados.alimentos[id];
+      }
+    });
+    nutSalvarAlimentos();
+  }
+  if (dados.registros && typeof dados.registros === 'object') { nutRegistros = dados.registros; nutSalvarRegistros(); }
+  if (dados.agua && typeof dados.agua === 'object') { nutAgua = dados.agua; nutSalvarAgua(); }
+  if (dados.perfil && typeof dados.perfil === 'object') { nutPerfil = dados.perfil; }
+  nutPronto = true;
+  nutRender();
+}
+/* ================= INICIALIZAÇÃO ================= */
+function nutInit() {
+  var view = document.getElementById(NUT_VIEW_ID);
+  if (!view) return;
+  view.addEventListener('click', nutCliqueView);
+  nutGarantirEstado().then(function () {
+    nutRender();
+  }).catch(function () {
+    nutPronto = true;
+    nutRender();
+  });
+}
+/* ================= EXPORTAÇÃO (main.js usa este objeto) ================= */
+window.Nutricao = {
+  init: nutInit,
+  ver: ver,
+  backupExtrair: nutBackupExtrair,
+  backupAplicar: nutBackupAplicar,
+};
