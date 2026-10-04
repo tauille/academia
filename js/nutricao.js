@@ -850,6 +850,10 @@ function nutBackupAplicar(dados) {
   nutPronto = true;
   nutRender();
 }
+function ver(nome) {
+  nutView = ['diario', 'historico', 'alimentos'].indexOf(nome) !== -1 ? nome : 'diario';
+  nutGarantirEstado().then(nutRender);
+}
 /* ================= INICIALIZAÇÃO ================= */
 function nutInit() {
   var view = document.getElementById(NUT_VIEW_ID);
