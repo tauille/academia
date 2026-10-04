@@ -735,5 +735,6 @@ async function iniciarApp() {
   if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
   if (!Array.isArray(historico)) historico = [];
   navegar('treinos');
+  if (window.Nutricao && window.Nutricao.init) window.Nutricao.init();
 }
 iniciarApp();
