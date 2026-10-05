@@ -179,7 +179,7 @@ const ALIMENTOS_PADRAO = [
 /* ---------- Estado ---------- */
 let nutPronto = false;
 let nutView = 'diario';
-let nutHistAba = 'dias';
+let nutHistAba = 'diario';
 let nutBusca = '';
 let nutAlimentos = {};
 let nutMetas = Object.assign({}, METAS_PADRAO);
