@@ -162,36 +162,36 @@ function nutHtmlHistorico() {
   };
   var soma = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
   var divisor = 1;
-  if (nutHistAba === 'semana') {
+  var rotuloMedia = '';
+  if (nutHistAba === 'diario') {
+    var hoje = nutHoje();
+    var t = nutTotaisDia(hoje);
+    soma.kcal = t.kcal; soma.prot = t.prot; soma.carb = t.carb; soma.gord = t.gord;
+    soma.agua = nutAgua[hoje] || 0;
+    linhas = nutLinhaHistorico('Hoje', hoje, true);
+    rotuloMedia = 'Total do dia';
+    divisor = 1;
+  } else if (nutHistAba === 'semana') {
     var dias = nutSemanaAtual();
     divisor = 7;
     linhas = dias.map(function (data, idx) {
-      var t = nutTotaisDia(data);
+      var tt = nutTotaisDia(data);
       var agua = nutAgua[data] || 0;
-      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
+      soma.kcal += tt.kcal; soma.prot += tt.prot; soma.carb += tt.carb; soma.gord += tt.gord; soma.agua += agua;
       return nutLinhaHistorico(DIAS_ROTULO[idx] + ' ' + nutDataUtf(data), data, data === nutHoje());
     }).join('');
-  } else if (nutHistAba === 'mes') {
+    rotuloMedia = 'Média/dia da semana';
+  } else {
     var diasMes = nutDiasDoMes();
     divisor = diasMes.length;
     linhas = diasMes.map(function (data) {
-      var t = nutTotaisDia(data);
+      var tt = nutTotaisDia(data);
       var agua = nutAgua[data] || 0;
-      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
+      soma.kcal += tt.kcal; soma.prot += tt.prot; soma.carb += tt.carb; soma.gord += tt.gord; soma.agua += agua;
       return nutLinhaHistorico(nutDataUtf(data), data, data === nutHoje());
     }).join('');
-  } else {
-    var ultimos = nutListaDias(7);
-    divisor = 7;
-    linhas = ultimos.map(function (data) {
-      var t = nutTotaisDia(data);
-      var agua = nutAgua[data] || 0;
-      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
-      var rotulo = data === nutHoje() ? 'Hoje' : nutDataUtf(data);
-      return nutLinhaHistorico(rotulo, data, data === nutHoje());
-    }).join('');
+    rotuloMedia = 'Média/dia do mês';
   }
-  var rotuloMedia = nutHistAba === 'mes' ? 'Média/dia do mês' : (nutHistAba === 'semana' ? 'Média/dia da semana' : 'Média 7 dias');
   rodape =
     '<tr>' +
       '<td style="padding:8px 6px;color:#c8f31d;font-weight:600">' + rotuloMedia + '</td>' +
@@ -205,7 +205,7 @@ function nutHtmlHistorico() {
     '<div style="padding:16px;max-width:520px;margin:0 auto">' +
       nutBanner() + nutMiniNav() +
       '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
-        chip('dias', 'Últimos 7 dias') + chip('semana', 'Semana atual') + chip('mes', 'Mês atual') +
+        chip('diario', 'Diário') + chip('semana', 'Semana') + chip('mes', 'Mês') +
       '</div>' +
       nutTabelaHistorico(linhas, rodape) +
     '</div>'
