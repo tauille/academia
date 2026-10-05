@@ -136,47 +136,22 @@ function nutLinhaHistorico(rotulo, data, destaque) {
     '</tr>'
   );
 }
+/* ---------- Dias do mês atual ---------- */
+function nutDiasDoMes() {
+  var partes = nutHoje().split('-');
+  var ano = parseInt(partes[0], 10);
+  var mes = parseInt(partes[1], 10);
+  var total = new Date(ano, mes, 0).getDate();
+  var mm = mes < 10 ? '0' + mes : mes;
+  var out = [];
+  for (var d = 1; d <= total; d++) {
+    out.push(ano + '-' + mm + '-' + (d < 10 ? '0' + d : d));
+  }
+  return out;
+}
 function nutHtmlHistorico() {
   var linhas = '';
   var rodape = '';
-  if (nutHistAba === 'semana') {
-    var dias = nutSemanaAtual();
-    var soma = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
-    linhas = dias.map(function (data, idx) {
-      var t = nutTotaisDia(data);
-      var agua = nutAgua[data] || 0;
-      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
-      return nutLinhaHistorico(DIAS_ROTULO[idx] + ' ' + nutDataUtf(data), data, data === nutHoje());
-    }).join('');
-    rodape =
-      '<tr>' +
-        '<td style="padding:8px 6px;color:#c8f31d;font-weight:600">Média/dia</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.kcal / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.prot / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.carb / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.gord / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.agua / 7) + ' ml</td>' +
-      '</tr>';
-  } else {
-    var ultimos = nutListaDias(7);
-    var somaD = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
-    linhas = ultimos.map(function (data) {
-      var t = nutTotaisDia(data);
-      var agua = nutAgua[data] || 0;
-      somaD.kcal += t.kcal; somaD.prot += t.prot; somaD.carb += t.carb; somaD.gord += t.gord; somaD.agua += agua;
-      var rotulo = data === nutHoje() ? 'Hoje' : nutDataUtf(data);
-      return nutLinhaHistorico(rotulo, data, data === nutHoje());
-    }).join('');
-    rodape =
-      '<tr>' +
-        '<td style="padding:8px 6px;color:#c8f31d;font-weight:600">Média 7 dias</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.kcal / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.prot / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.carb / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.gord / 7) + '</td>' +
-        '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(somaD.agua / 7) + ' ml</td>' +
-      '</tr>';
-  }
   var chip = function (aba, rotulo) {
     var ativo = nutHistAba === aba;
     return '<button data-nut="hist-aba" data-aba="' + aba + '" class="chip" style="' +
@@ -185,10 +160,53 @@ function nutHtmlHistorico() {
       'color:' + (ativo ? '#141807' : '#c6d4b4') + ';' +
       'border-radius:999px;padding:7px 14px;font:600 13px Inter,sans-serif;cursor:pointer">' + rotulo + '</button>';
   };
+  var soma = { kcal: 0, prot: 0, carb: 0, gord: 0, agua: 0 };
+  var divisor = 1;
+  if (nutHistAba === 'semana') {
+    var dias = nutSemanaAtual();
+    divisor = 7;
+    linhas = dias.map(function (data, idx) {
+      var t = nutTotaisDia(data);
+      var agua = nutAgua[data] || 0;
+      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
+      return nutLinhaHistorico(DIAS_ROTULO[idx] + ' ' + nutDataUtf(data), data, data === nutHoje());
+    }).join('');
+  } else if (nutHistAba === 'mes') {
+    var diasMes = nutDiasDoMes();
+    divisor = diasMes.length;
+    linhas = diasMes.map(function (data) {
+      var t = nutTotaisDia(data);
+      var agua = nutAgua[data] || 0;
+      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
+      return nutLinhaHistorico(nutDataUtf(data), data, data === nutHoje());
+    }).join('');
+  } else {
+    var ultimos = nutListaDias(7);
+    divisor = 7;
+    linhas = ultimos.map(function (data) {
+      var t = nutTotaisDia(data);
+      var agua = nutAgua[data] || 0;
+      soma.kcal += t.kcal; soma.prot += t.prot; soma.carb += t.carb; soma.gord += t.gord; soma.agua += agua;
+      var rotulo = data === nutHoje() ? 'Hoje' : nutDataUtf(data);
+      return nutLinhaHistorico(rotulo, data, data === nutHoje());
+    }).join('');
+  }
+  var rotuloMedia = nutHistAba === 'mes' ? 'Média/dia do mês' : (nutHistAba === 'semana' ? 'Média/dia da semana' : 'Média 7 dias');
+  rodape =
+    '<tr>' +
+      '<td style="padding:8px 6px;color:#c8f31d;font-weight:600">' + rotuloMedia + '</td>' +
+      '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.kcal / divisor) + '</td>' +
+      '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.prot / divisor) + '</td>' +
+      '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.carb / divisor) + '</td>' +
+      '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.gord / divisor) + '</td>' +
+      '<td style="padding:8px 6px;color:#edf7dc;font-weight:600">' + nutFmt(soma.agua / divisor) + ' ml</td>' +
+    '</tr>';
   return (
     '<div style="padding:16px;max-width:520px;margin:0 auto">' +
       nutBanner() + nutMiniNav() +
-      '<div style="display:flex;gap:8px;margin-top:14px">' + chip('dias', 'Últimos 7 dias') + chip('semana', 'Semana atual') + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
+        chip('dias', 'Últimos 7 dias') + chip('semana', 'Semana atual') + chip('mes', 'Mês atual') +
+      '</div>' +
       nutTabelaHistorico(linhas, rodape) +
     '</div>'
   );
