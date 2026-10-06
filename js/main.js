@@ -4,6 +4,7 @@
        + Estatísticas no Histórico
        + Tela sempre ativa (Wake Lock) durante o timer
        + Integração Módulo Nutrição (4ª aba + backup)
+       + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
@@ -447,6 +448,12 @@ function abrirEditor(treinoId) {
         renderRows();
       });
       cont.appendChild(row);
+      /* ===== INTEGRAÇÃO AUTCOMPLETE DE EQUIPAMENTOS =====
+         Ativa o autocomplete + botão "+" no campo de equipamento
+         de cada linha de exercício recém-criada. */
+      if (window.iniciarAutocompleteEquipamento) {
+        iniciarAutocompleteEquipamento(row.querySelector('.ed-equipamento'));
+      }
     });
   };
   renderRows();
