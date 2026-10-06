@@ -1,12 +1,13 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v7: + Backup (Exportar/Importar JSON)
+   v8: + Backup (Exportar/Importar JSON)
        + Estatísticas no Histórico
        + Tela sempre ativa (Wake Lock) durante o timer
        + Integração Módulo Nutrição (4ª aba + backup)
        + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
        + Campo único Equipamento/Aparelho (seletor duplicado removido)
        + Som do timer corrigido no iPhone (áudio destravado no 1º toque)
+       + Botão Limpar histórico
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
@@ -296,7 +297,7 @@ function renderGerenciar() {
 }
 function exportarDados() {
   const dados = {
-    app: 'itrainer', versao: 7, exportadoEm: new Date().toISOString(),
+    app: 'itrainer', versao: 8, exportadoEm: new Date().toISOString(),
     treinos, estado, historico
   };
   // Inclui os dados do módulo Nutrição (se carregado)
@@ -503,6 +504,14 @@ function registrarHistorico(t) {
   });
   salvarHistorico();
 }
+function limparHistorico() {
+  if (!historico.length) { mostrarToast('Histórico já está vazio'); return; }
+  if (!confirm(`Apagar todo o histórico (${historico.length} treino(s))?\nEssa ação não pode ser desfeita.`)) return;
+  historico = [];
+  salvarHistorico();
+  mostrarToast('Histórico limpo');
+  renderHistorico();
+}
 function capitalizar(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function calcularEstatisticas() {
   const stats = { total: historico.length, ultimos7: 0, mediaSemana: 0, maisFrequente: null, volume: 0, streak: 0 };
@@ -539,7 +548,10 @@ function renderHistorico() {
   const stats = calcularEstatisticas();
   const statsHtml = `
     <div class="stats-box" style="margin-bottom:1rem;padding:0.9rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
-      <strong style="display:block;margin-bottom:0.6rem;font-size:0.85rem;">📊 Suas estatísticas</strong>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.6rem;">
+        <strong style="font-size:0.85rem;">📊 Suas estatísticas</strong>
+        <button class="btn btn-outline btn-pequeno" id="btnLimparHistorico">Limpar histórico</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;">
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.total}</div><div style="font-size:0.68rem;color:var(--muted);">Treinos totais</div></div>
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.ultimos7}</div><div style="font-size:0.68rem;color:var(--muted);">Últimos 7 dias</div></div>
@@ -551,34 +563,36 @@ function renderHistorico() {
     </div>`;
   if (!historico.length) {
     lista.innerHTML = statsHtml + '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
-    return;
+  } else {
+    const grupos = {};
+    historico.forEach(h => {
+      if (!grupos[h.data]) grupos[h.data] = [];
+      grupos[h.data].push(h);
+    });
+    const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+    lista.innerHTML = statsHtml + datas.map(data => {
+      const titulo = capitalizar(
+        new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+      );
+      return `
+        <div class="hist-dia">
+          <div class="hist-dia-cabecalho">
+            <strong>${titulo}</strong>
+            <span>${grupos[data].length} treino(s)</span>
+          </div>
+          ${grupos[data].map(h => `
+            <div class="hist-item">
+              <div class="hist-item-topo">
+                <strong>${h.treinoNome}</strong>
+                <span>🕐 ${h.hora}</span>
+              </div>
+              <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
+            </div>`).join('')}
+        </div>`;
+    }).join('');
   }
-  const grupos = {};
-  historico.forEach(h => {
-    if (!grupos[h.data]) grupos[h.data] = [];
-    grupos[h.data].push(h);
-  });
-  const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-  lista.innerHTML = statsHtml + datas.map(data => {
-    const titulo = capitalizar(
-      new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
-    );
-    return `
-      <div class="hist-dia">
-        <div class="hist-dia-cabecalho">
-          <strong>${titulo}</strong>
-          <span>${grupos[data].length} treino(s)</span>
-        </div>
-        ${grupos[data].map(h => `
-          <div class="hist-item">
-            <div class="hist-item-topo">
-              <strong>${h.treinoNome}</strong>
-              <span>🕐 ${h.hora}</span>
-            </div>
-            <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
-          </div>`).join('')}
-      </div>`;
-  }).join('');
+  const btnLimparHistorico = document.getElementById('btnLimparHistorico');
+  if (btnLimparHistorico) btnLimparHistorico.addEventListener('click', limparHistorico);
 }
 /* ---------- 9. SOM (Web Audio API) ---------- */
 let audioCtx = null;
