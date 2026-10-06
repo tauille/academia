@@ -3,9 +3,7 @@
    Autocomplete de equipamentos + botão de cadastro novo.
    Depende de: equipamentos.js (carregar ANTES deste).
    Uso:
-     iniciarAutocompleteEquipamento(document.getElementById('idDoCampo'), {
-       onSelecionar: function (nome) { /* opcional */ }
-     });
+     iniciarAutocompleteEquipamento(campoInput, { onSelecionar: fn });
    ============================================================ */
 
 (function () {
