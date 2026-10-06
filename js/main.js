@@ -5,6 +5,7 @@
        + Tela sempre ativa (Wake Lock) durante o timer
        + Integração Módulo Nutrição (4ª aba + backup)
        + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
+       + Campo único Equipamento/Aparelho (seletor duplicado removido)
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
@@ -380,7 +381,7 @@ function abrirEditor(treinoId) {
   const coletar = () => {
     treino.exercicios = Array.from(cont.querySelectorAll('.ed-exercicio')).map(row => ({
       nome: row.querySelector('.ed-nome').value.trim(),
-      icone: row.querySelector('.ed-icone').value || 'halteres',
+      icone: row.dataset.icone || 'halteres',
       equipamento: row.querySelector('.ed-equipamento').value.trim(),
       tipo: row.querySelector('.ed-tipo-select').value || 'reps',
       series: Number(row.querySelector('.ed-series').value) || 3,
@@ -393,16 +394,15 @@ function abrirEditor(treinoId) {
     cont.innerHTML = '';
     treino.exercicios.forEach((ex, i) => {
       const tipo = ex.tipo === 'tempo' ? 'tempo' : 'reps';
-      const sel = Object.keys(ICONES)
-        .map(k => `<option value="${k}" ${ex.icone === k ? 'selected' : ''}>${k}</option>`).join('');
       const row = document.createElement('div');
       row.className = 'ed-exercicio';
+      row.dataset.icone = ex.icone;
       row.innerHTML = `
         <input type="text" class="ed-nome" value="${ex.nome}" placeholder="Nome do exercício">
-        <div class="ed-dupla">
-          <select class="ed-icone">${sel}</select>
-          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equipamento">
-        </div>
+        <label class="campo">
+          <span>Equipamento/Aparelho</span>
+          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Digite ou escolha">
+        </label>
         <div class="ed-tipo" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;align-items:end;margin-bottom:0.5rem;">
           <label style="${CAMPO}">
             <span style="${LBL}">Tipo de medição</span>
