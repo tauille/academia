@@ -6,6 +6,7 @@
        + Integração Módulo Nutrição (4ª aba + backup)
        + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
        + Campo único Equipamento/Aparelho (seletor duplicado removido)
+       + Som do timer corrigido no iPhone (áudio destravado no 1º toque)
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
@@ -587,8 +588,16 @@ function desbloquearAudio() {
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   } catch (e) {}
 }
+// iOS: destrava o áudio no primeiro toque em qualquer lugar da tela
+// (o iPhone só permite som depois de uma interação do usuário)
+document.addEventListener('pointerdown', function destravarAudio() {
+  desbloquearAudio();
+  document.removeEventListener('pointerdown', destravarAudio);
+});
 function beep(freq, dur, vol, atraso) {
   if (!audioCtx) return;
+  // Se o iPhone pausou o áudio, retoma antes de tocar o bipe
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const t0 = audioCtx.currentTime + (atraso || 0);
     const osc = audioCtx.createOscillator();
