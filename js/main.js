@@ -1,16 +1,18 @@
 /* ==========================================================================
-   itrainer — Lógica do app (CRUD + execução + timer + histórico + nutrição)
-   v9: + Banco de dados na versão 3 (compatível com o módulo Nutrição)
-       + Botão "Limpar treino" antes de "Concluir treino"
-       + Conclusão válida apenas no dia do treino (reset automático no dia seguinte)
-       + Integração com o módulo Nutrição mantida (init + ver + backup)
-       + Áudio do cronômetro destravado no 1º toque (iPhone/Safari)
+   itrainer — Lógica do app (CRUD + execução + timer + histórico)
+   v7: + Backup (Exportar/Importar JSON)
+       + Estatísticas no Histórico
+       + Tela sempre ativa (Wake Lock) durante o timer
+       + Integração Módulo Nutrição (4ª aba + backup)
+       + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
+       + Campo único Equipamento/Aparelho (seletor duplicado removido)
+       + Som do timer corrigido no iPhone (áudio destravado no 1º toque)
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
 const DB_NOME = 'itrainer-db';
-const DB_VERSAO = 3;
+const DB_VERSAO = 2;
 let treinos = null;
 let estado = {};
 let treinoAtivo = null;
@@ -111,24 +113,8 @@ function navegar(viewId) {
   if (viewId === 'gerenciar') renderGerenciar();
   if (viewId === 'nutricao') { if (window.Nutricao) window.Nutricao.ver('diario'); }
 }
-/* ---------- 3.1 RESET DIÁRIO (conclusão vale só no dia) ---------- */
-function resetarTreinosDoDiaAnterior() {
-  const hojeStr = hoje();
-  let mudou = false;
-  Object.keys(estado).forEach(id => {
-    const ex = estado[id];
-    if (ex && ex.dataConclusao && ex.dataConclusao !== hojeStr) {
-      const t = treinos.find(x => x.id === id);
-      if (t) t.exercicios.forEach((e, i) => { ex[i] = Array(e.series).fill(false); });
-      delete ex.dataConclusao;
-      mudou = true;
-    }
-  });
-  if (mudou) salvarEstado();
-}
 /* ---------- 4. LISTAR TREINOS ---------- */
 function renderTreinos() {
-  resetarTreinosDoDiaAnterior();
   const lista = document.getElementById('listaTreinos');
   if (treinoAtivo) { renderExecucao(); return; }
   if (!treinos.length) {
@@ -168,7 +154,6 @@ function tempoDoExercicio(ex) {
   return tempoEmSegundos(ex.repeticoes);
 }
 function renderExecucao() {
-  resetarTreinosDoDiaAnterior();
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
   if (!t) { renderTreinos(); return; }
@@ -217,19 +202,15 @@ function renderExecucao() {
       </div>`;
   });
   if (total) {
-    html += `
-      <div class="exec-acoes" style="display:flex;flex-direction:column;gap:0.6rem;margin-top:1rem;">
-        <button class="btn btn-primary btn-bloco" id="btnConcluir">Concluir treino</button>
-        <button class="btn btn-outline btn-bloco" id="btnLimpar">Limpar treino</button>
-      </div>`;
+    html += `<button class="btn ${concluido ? 'btn-outline' : 'btn-primary'} btn-bloco" id="btnConcluir">
+      ${concluido ? 'Desmarcar treino' : 'Concluir treino'}
+    </button>`;
   }
   lista.innerHTML = html;
   document.getElementById('voltarTreinos').addEventListener('click', () => { treinoAtivo = null; renderTreinos(); });
   lista.querySelectorAll('.serie').forEach(btn => {
     btn.addEventListener('click', () => marcarSerie(Number(btn.dataset.ex), Number(btn.dataset.serie)));
   });
-  const btnLimpar = document.getElementById('btnLimpar');
-  if (btnLimpar) btnLimpar.addEventListener('click', limparTreino);
   const btnConcluir = document.getElementById('btnConcluir');
   if (btnConcluir) btnConcluir.addEventListener('click', concluirTreino);
 }
@@ -256,27 +237,10 @@ function marcarSerie(exIndex, serieIndex) {
     if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
     const completo = t.exercicios.every((e, i) =>
       (estado[t.id][i] || []).filter(Boolean).length >= e.series);
-    if (completo) {
-      estado[t.id].dataConclusao = hoje();
-      salvarEstado();
-      registrarHistorico(t);
-    }
+    if (completo) registrarHistorico(t);
   }
   renderExecucao();
 }
-/* Limpa as marcações do treino, sem encerrar nem sair da página */
-function limparTreino() {
-  const t = treinoAtivo;
-  if (!t) return;
-  if (!confirm('Limpar as marcações deste treino?')) return;
-  const ex = {};
-  t.exercicios.forEach((e, i) => { ex[i] = Array(e.series).fill(false); });
-  estado[t.id] = ex;
-  salvarEstado();
-  mostrarToast('Treino limpo');
-  renderExecucao();
-}
-/* Conclui o treino e volta à tela principal */
 function concluirTreino() {
   const t = treinoAtivo;
   if (!t || !t.exercicios.length) return;
@@ -285,12 +249,10 @@ function concluirTreino() {
   const tudoFeito = feitos === t.exercicios.length;
   t.exercicios.forEach((e, i) => { ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true); });
   estado[t.id] = ex;
-  estado[t.id].dataConclusao = hoje();
   salvarEstado();
   if (!tudoFeito) registrarHistorico(t);
   mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
-  treinoAtivo = null;
-  renderTreinos();
+  renderExecucao();
 }
 /* ---------- 6. GERENCIAR (CRUD + BACKUP) ---------- */
 function renderGerenciar() {
@@ -334,9 +296,10 @@ function renderGerenciar() {
 }
 function exportarDados() {
   const dados = {
-    app: 'itrainer', versao: 9, exportadoEm: new Date().toISOString(),
+    app: 'itrainer', versao: 7, exportadoEm: new Date().toISOString(),
     treinos, estado, historico
   };
+  // Inclui os dados do módulo Nutrição (se carregado)
   if (window.Nutricao && window.Nutricao.backupExtrair) {
     dados.nutricao = window.Nutricao.backupExtrair();
   }
@@ -361,6 +324,7 @@ function importarDados(file) {
       estado = (dados.estado && typeof dados.estado === 'object' && !Array.isArray(dados.estado)) ? dados.estado : {};
       historico = Array.isArray(dados.historico) ? dados.historico : [];
       salvarTreinos(); salvarEstado(); salvarHistorico();
+      // Restaura os dados do módulo Nutrição (se presentes no backup)
       if (window.Nutricao && window.Nutricao.backupAplicar && dados.nutricao) {
         window.Nutricao.backupAplicar(dados.nutricao);
       }
@@ -485,6 +449,9 @@ function abrirEditor(treinoId) {
         renderRows();
       });
       cont.appendChild(row);
+      /* ===== INTEGRAÇÃO AUTCOMPLETE DE EQUIPAMENTOS =====
+         Ativa o autocomplete + botão "+" no campo de equipamento
+         de cada linha de exercício recém-criada. */
       if (window.iniciarAutocompleteEquipamento) {
         iniciarAutocompleteEquipamento(row.querySelector('.ed-equipamento'));
       }
@@ -613,7 +580,7 @@ function renderHistorico() {
       </div>`;
   }).join('');
 }
-/* ---------- 9. SOM (Web Audio API) — corrigido para iPhone/Safari ---------- */
+/* ---------- 9. SOM (Web Audio API) ---------- */
 let audioCtx = null;
 function desbloquearAudio() {
   try {
@@ -621,12 +588,15 @@ function desbloquearAudio() {
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   } catch (e) {}
 }
+// iOS: destrava o áudio no primeiro toque em qualquer lugar da tela
+// (o iPhone só permite som depois de uma interação do usuário)
 document.addEventListener('pointerdown', function destravarAudio() {
   desbloquearAudio();
   document.removeEventListener('pointerdown', destravarAudio);
 });
 function beep(freq, dur, vol, atraso) {
   if (!audioCtx) return;
+  // Se o iPhone pausou o áudio, retoma antes de tocar o bipe
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const t0 = audioCtx.currentTime + (atraso || 0);
@@ -660,7 +630,7 @@ function tocarSom(tipo) {
 let wakeLock = null;
 let wakeLockAtivo = false;
 async function solicitarWakeLock() {
-  if (!('wakeLock' in navigator)) return;
+  if (!('wakeLock' in navigator)) return; // iOS Safari não suporta
   try {
     wakeLock = await navigator.wakeLock.request('screen');
     wakeLockAtivo = true;
@@ -757,9 +727,6 @@ document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
 document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
-['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev =>
-  document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true })
-);
 async function iniciarApp() {
   try {
     await abrirBanco();
