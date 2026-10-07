@@ -1,9 +1,7 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v7: + Tela ativa durante toda a execução do app (Wake Lock global)
-       + Correção do bip no iPhone (Safari / Web Audio)
-       + Botão único "concluir treino" (encerra e volta à tela principal)
-       + Botão "limpar treino" mantido (limpa marcações sem encerrar)
+   v8: + Botão "concluir treino" antes de "limpar treino"
+       + Conclusão válida apenas no dia do treino (reset automático no dia seguinte)
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
@@ -123,8 +121,25 @@ function navegar(viewId) {
   if (viewId === 'gerenciar') renderGerenciar();
 }
 
+/* ---------- 3.1 RESET DIÁRIO (conclusão vale só no dia) ---------- */
+function resetarTreinosDoDiaAnterior() {
+  const hojeStr = hoje();
+  let mudou = false;
+  Object.keys(estado).forEach(id => {
+    const ex = estado[id];
+    if (ex && ex.dataConclusao && ex.dataConclusao !== hojeStr) {
+      const t = treinos.find(x => x.id === id);
+      if (t) t.exercicios.forEach((e, i) => { ex[i] = Array(e.series).fill(false); });
+      delete ex.dataConclusao;
+      mudou = true;
+    }
+  });
+  if (mudou) salvarEstado();
+}
+
 /* ---------- 4. LISTAR TREINOS ---------- */
 function renderTreinos() {
+  resetarTreinosDoDiaAnterior();
   const lista = document.getElementById('listaTreinos');
   if (treinoAtivo) { renderExecucao(); return; }
   if (!treinos.length) {
@@ -166,6 +181,7 @@ function tempoDoExercicio(ex) {
 }
 
 function renderExecucao() {
+  resetarTreinosDoDiaAnterior();
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
   if (!t) { renderTreinos(); return; }
@@ -221,8 +237,8 @@ function renderExecucao() {
   if (total) {
     html += `
       <div class="exec-acoes" style="display:flex;flex-direction:column;gap:0.6rem;margin-top:1rem;">
-        <button class="btn btn-outline btn-bloco" id="btnLimpar">Limpar treino</button>
         <button class="btn btn-primary btn-bloco" id="btnConcluir">Concluir treino</button>
+        <button class="btn btn-outline btn-bloco" id="btnLimpar">Limpar treino</button>
       </div>`;
   }
 
@@ -264,13 +280,17 @@ function marcarSerie(exIndex, serieIndex) {
 
     const completo = t.exercicios.every((e, i) =>
       (estado[t.id][i] || []).filter(Boolean).length >= e.series);
-    if (completo) registrarHistorico(t);
+    if (completo) {
+      estado[t.id].dataConclusao = hoje();
+      salvarEstado();
+      registrarHistorico(t);
+    }
   }
 
   renderExecucao();
 }
 
-/* RF-05: limpa as marcações do treino, sem encerrar nem sair da página */
+/* Limpa as marcações do treino, sem encerrar nem sair da página */
 function limparTreino() {
   const t = treinoAtivo;
   if (!t) return;
@@ -283,7 +303,7 @@ function limparTreino() {
   renderExecucao();
 }
 
-/* RF-04: conclui o treino e volta à tela principal */
+/* Conclui o treino e volta à tela principal */
 function concluirTreino() {
   const t = treinoAtivo;
   if (!t || !t.exercicios.length) return;
@@ -292,6 +312,7 @@ function concluirTreino() {
   const tudoFeito = feitos === t.exercicios.length;
   t.exercicios.forEach((e, i) => { ex[i] = tudoFeito ? Array(e.series).fill(false) : Array(e.series).fill(true); });
   estado[t.id] = ex;
+  estado[t.id].dataConclusao = hoje();
   salvarEstado();
   if (!tudoFeito) registrarHistorico(t);
   mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
@@ -345,7 +366,7 @@ function renderGerenciar() {
 }
 
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 7, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 8, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -646,8 +667,6 @@ function renderHistorico() {
 /* ---------- 9. SOM (Web Audio API) — corrigido para iPhone/Safari ---------- */
 let audioCtx = null;
 
-/* RF-02: no iOS o contexto de áudio só toca se for criado/resumido dentro de um gesto do usuário.
-   Por isso o desbloqueio é disparado em QUALQUER toque/clique, não só ao marcar série. */
 function desbloquearAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -692,9 +711,8 @@ function tocarSom(tipo) {
 let wakeLock = null;
 let wakeLockAtivo = false;
 
-/* RF-01: mantém a tela ativa durante TODA a execução do app */
 async function solicitarWakeLock() {
-  if (!('wakeLock' in navigator)) return; // iOS Safari não suporta
+  if (!('wakeLock' in navigator)) return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
     wakeLockAtivo = true;
@@ -702,7 +720,6 @@ async function solicitarWakeLock() {
   } catch (e) { wakeLockAtivo = false; }
 }
 
-// Re-solicita ao voltar para a aba (o navegador pode liberar sozinho)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') solicitarWakeLock();
 });
@@ -802,7 +819,6 @@ document.querySelectorAll('[data-view]').forEach(el => {
 });
 document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
 
-/* RF-02: desbloqueia o áudio em qualquer interação (essencial no iPhone) */
 ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev =>
   document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true })
 );
@@ -832,7 +848,7 @@ async function iniciarApp() {
   if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
   if (!Array.isArray(historico)) historico = [];
 
-  solicitarWakeLock(); // RF-01: tela ativa durante toda a execução do app
+  solicitarWakeLock();
   navegar('treinos');
 }
 
