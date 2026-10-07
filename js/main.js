@@ -7,6 +7,7 @@
        + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
        + Campo único Equipamento/Aparelho (seletor duplicado removido)
        + Som do timer corrigido no iPhone (áudio destravado no 1º toque)
+   v9: + Áudio sem aviso de autoplay (nunca cria/retoma fora de gesto do usuário)
    ========================================================================== */
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
@@ -296,7 +297,7 @@ function renderGerenciar() {
 }
 function exportarDados() {
   const dados = {
-    app: 'itrainer', versao: 7, exportadoEm: new Date().toISOString(),
+    app: 'itrainer', versao: 9, exportadoEm: new Date().toISOString(),
     treinos, estado, historico
   };
   // Inclui os dados do módulo Nutrição (se carregado)
@@ -580,24 +581,28 @@ function renderHistorico() {
       </div>`;
   }).join('');
 }
-/* ---------- 9. SOM (Web Audio API) ---------- */
+/* ---------- 9. SOM (Web Audio API) — sem avisos de autoplay ---------- */
 let audioCtx = null;
 function desbloquearAudio() {
+  // Só roda DENTRO de um gesto do usuário (toque/clique na tela).
+  // O Chrome nunca bloqueia áudio criado/retomado num gesto.
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   } catch (e) {}
 }
-// iOS: destrava o áudio no primeiro toque em qualquer lugar da tela
-// (o iPhone só permite som depois de uma interação do usuário)
-document.addEventListener('pointerdown', function destravarAudio() {
-  desbloquearAudio();
-  document.removeEventListener('pointerdown', destravarAudio);
+// Cria/retoma o áudio no primeiro contato do usuário em qualquer lugar da página
+['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
+  document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true });
 });
 function beep(freq, dur, vol, atraso) {
-  if (!audioCtx) return;
-  // Se o iPhone pausou o áudio, retoma antes de tocar o bipe
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  // NUNCA retoma áudio fora de gesto (nada de resume() aqui):
+  // se estiver suspenso, apenas não toca — e o aviso não aparece.
+  if (!audioCtx || audioCtx.state !== 'running') return;
   try {
     const t0 = audioCtx.currentTime + (atraso || 0);
     const osc = audioCtx.createOscillator();
