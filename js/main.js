@@ -1,26 +1,27 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v8: + Backup (Exportar/Importar JSON)
-       + Estatísticas no Histórico
-       + Tela sempre ativa (Wake Lock) durante o timer
-       + Integração Módulo Nutrição (4ª aba + backup)
-       + Autocomplete de equipamentos (equipamentos.js + autocomplete-equipamento.js)
-       + Campo único Equipamento/Aparelho (seletor duplicado removido)
-       + Som do timer corrigido no iPhone (áudio destravado no 1º toque)
-       + Botão Limpar histórico
+   v7: + Tela ativa durante toda a execução do app (Wake Lock global)
+       + Correção do bip no iPhone (Safari / Web Audio)
+       + Botão único "concluir treino" (encerra e volta à tela principal)
+       + Botão "limpar treino" mantido (limpa marcações sem encerrar)
    ========================================================================== */
+
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
+
 const DB_NOME = 'itrainer-db';
-const DB_VERSAO = 2;
+const DB_VERSAO = 1;
+
 let treinos = null;
 let estado = {};
 let treinoAtivo = null;
 let historico = [];
 let db = null;
+
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
 function hoje() { return new Date().toISOString().split('T')[0]; }
+
 /* ---------- 1. BANCO DE DADOS (IndexedDB) ---------- */
 function abrirBanco() {
   return new Promise((resolve, reject) => {
@@ -38,6 +39,7 @@ function abrirBanco() {
     } catch (e) { reject(e); }
   });
 }
+
 function dbPut(store, valor) {
   return new Promise((resolve) => {
     if (!db) { resolve(false); return; }
@@ -49,6 +51,7 @@ function dbPut(store, valor) {
     } catch (e) { resolve(false); }
   });
 }
+
 function dbGet(store) {
   return new Promise((resolve) => {
     if (!db) { resolve(undefined); return; }
@@ -60,6 +63,7 @@ function dbGet(store) {
     } catch (e) { resolve(undefined); }
   });
 }
+
 async function migrarSeNecessario() {
   if (!db) return;
   const jaTem = await dbGet('treinos');
@@ -68,6 +72,7 @@ async function migrarSeNecessario() {
   await dbPut('estado', lerEstadoDoLocalStorage());
   await dbPut('historico', lerHistoricoDoLocalStorage());
 }
+
 /* ---------- 2. LOCALSTORAGE (fallback) ---------- */
 function lerTreinosDoLocalStorage() {
   try {
@@ -90,12 +95,15 @@ function lerHistoricoDoLocalStorage() {
   } catch (e) {}
   return [];
 }
+
 function carregarTreinos() { treinos = lerTreinosDoLocalStorage() || JSON.parse(JSON.stringify(CONFIG.treinos)); salvarTreinos(); }
 function carregarEstado() { estado = lerEstadoDoLocalStorage(); }
 function carregarHistorico() { historico = lerHistoricoDoLocalStorage(); }
+
 function salvarTreinos() { localStorage.setItem(STORAGE_TREINOS, JSON.stringify(treinos)); if (db) dbPut('treinos', treinos); }
 function salvarEstado() { localStorage.setItem(STORAGE_ESTADO, JSON.stringify(estado)); if (db) dbPut('estado', estado); }
 function salvarHistorico() { localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico)); if (db) dbPut('historico', historico); }
+
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -103,6 +111,7 @@ function mostrarToast(msg) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
+
 /* ---------- 3. NAVEGAÇÃO ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -112,8 +121,8 @@ function navegar(viewId) {
   if (viewId === 'treinos') renderTreinos();
   if (viewId === 'historico') renderHistorico();
   if (viewId === 'gerenciar') renderGerenciar();
-  if (viewId === 'nutricao') { if (window.Nutricao) window.Nutricao.ver('diario'); }
 }
+
 /* ---------- 4. LISTAR TREINOS ---------- */
 function renderTreinos() {
   const lista = document.getElementById('listaTreinos');
@@ -145,6 +154,7 @@ function renderTreinos() {
     });
   });
 }
+
 /* ---------- 5. EXECUTAR TREINO ---------- */
 function tempoDoExercicio(ex) {
   if (!ex) return 0;
@@ -154,6 +164,7 @@ function tempoDoExercicio(ex) {
   }
   return tempoEmSegundos(ex.repeticoes);
 }
+
 function renderExecucao() {
   const lista = document.getElementById('listaTreinos');
   const t = treinoAtivo;
@@ -163,6 +174,7 @@ function renderExecucao() {
   const feitos = t.exercicios.filter((_, i) => (ex[i] || []).filter(Boolean).length >= t.exercicios[i].series).length;
   const pct = total ? Math.round((feitos / total) * 100) : 0;
   const concluido = total > 0 && feitos === total;
+
   let html = `
     <div class="exec-cabecalho">
       <button class="voltar" id="voltarTreinos">←</button>
@@ -171,7 +183,9 @@ function renderExecucao() {
         <div class="treino-progresso"><div class="fill" style="width:${pct}%"></div></div>
       </div>
     </div>`;
+
   if (!total) html += '<div class="vazio">Este treino não tem exercícios.<br>Edite em Gerenciar para adicionar.</div>';
+
   t.exercicios.forEach((exer, i) => {
     const feitas = (ex[i] || []).filter(Boolean).length;
     const exConcluido = feitas >= exer.series;
@@ -179,6 +193,7 @@ function renderExecucao() {
     const metaTempo = tempo > 0
       ? `<span class="chip">⏱️ <strong>${tempo}s</strong> execução</span>`
       : `<span class="chip">🔁 <strong>${exer.repeticoes}</strong> reps</span>`;
+
     html += `
       <div class="exercicio ${exConcluido ? 'concluido' : ''}">
         <div class="exercicio-topo">
@@ -202,29 +217,39 @@ function renderExecucao() {
         </div>
       </div>`;
   });
+
   if (total) {
-    html += `<button class="btn ${concluido ? 'btn-outline' : 'btn-primary'} btn-bloco" id="btnConcluir">
-      ${concluido ? 'Desmarcar treino' : 'Concluir treino'}
-    </button>`;
+    html += `
+      <div class="exec-acoes" style="display:flex;flex-direction:column;gap:0.6rem;margin-top:1rem;">
+        <button class="btn btn-outline btn-bloco" id="btnLimpar">Limpar treino</button>
+        <button class="btn btn-primary btn-bloco" id="btnConcluir">Concluir treino</button>
+      </div>`;
   }
+
   lista.innerHTML = html;
+
   document.getElementById('voltarTreinos').addEventListener('click', () => { treinoAtivo = null; renderTreinos(); });
   lista.querySelectorAll('.serie').forEach(btn => {
     btn.addEventListener('click', () => marcarSerie(Number(btn.dataset.ex), Number(btn.dataset.serie)));
   });
+  const btnLimpar = document.getElementById('btnLimpar');
+  if (btnLimpar) btnLimpar.addEventListener('click', limparTreino);
   const btnConcluir = document.getElementById('btnConcluir');
   if (btnConcluir) btnConcluir.addEventListener('click', concluirTreino);
 }
+
 function marcarSerie(exIndex, serieIndex) {
   const t = treinoAtivo;
   if (!t) return;
   const exer = t.exercicios[exIndex];
   if (!estado[t.id]) estado[t.id] = {};
   if (!estado[t.id][exIndex]) estado[t.id][exIndex] = [];
+
   const arr = estado[t.id][exIndex];
   const marcou = !arr[serieIndex];
   arr[serieIndex] = marcou;
   salvarEstado();
+
   if (marcou) {
     desbloquearAudio();
     const tempo = tempoDoExercicio(exer);
@@ -236,12 +261,29 @@ function marcarSerie(exIndex, serieIndex) {
       abrirTimer(exer.descanso, 'Descanso', exer.nome);
     }
     if (arr.filter(Boolean).length >= exer.series) mostrarToast('✅ Exercício concluído!');
+
     const completo = t.exercicios.every((e, i) =>
       (estado[t.id][i] || []).filter(Boolean).length >= e.series);
     if (completo) registrarHistorico(t);
   }
+
   renderExecucao();
 }
+
+/* RF-05: limpa as marcações do treino, sem encerrar nem sair da página */
+function limparTreino() {
+  const t = treinoAtivo;
+  if (!t) return;
+  if (!confirm('Limpar as marcações deste treino?')) return;
+  const ex = {};
+  t.exercicios.forEach((e, i) => { ex[i] = Array(e.series).fill(false); });
+  estado[t.id] = ex;
+  salvarEstado();
+  mostrarToast('Treino limpo');
+  renderExecucao();
+}
+
+/* RF-04: conclui o treino e volta à tela principal */
 function concluirTreino() {
   const t = treinoAtivo;
   if (!t || !t.exercicios.length) return;
@@ -253,11 +295,14 @@ function concluirTreino() {
   salvarEstado();
   if (!tudoFeito) registrarHistorico(t);
   mostrarToast(tudoFeito ? 'Treino desmarcado' : '✅ Treino concluído!');
-  renderExecucao();
+  treinoAtivo = null;
+  renderTreinos();
 }
+
 /* ---------- 6. GERENCIAR (CRUD + BACKUP) ---------- */
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
+
   const backupHtml = `
     <div class="backup-box" style="margin-bottom:1rem;padding:0.9rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
       <strong style="display:block;margin-bottom:0.5rem;font-size:0.85rem;">💾 Backup dos dados</strong>
@@ -266,8 +311,9 @@ function renderGerenciar() {
         <button class="btn btn-outline btn-pequeno" id="btnImportar">Importar</button>
         <input type="file" id="fileImportar" accept="application/json,.json" style="display:none;">
       </div>
-      <p style="margin:0.5rem 0 0;font-size:0.72rem;color:var(--muted);">Exportar baixa um arquivo JSON com treinos, progresso, histórico e nutrição. Importar restaura de um arquivo de backup.</p>
+      <p style="margin:0.5rem 0 0;font-size:0.72rem;color:var(--muted);">Exportar baixa um arquivo JSON com treinos, progresso e histórico. Importar restaura de um arquivo de backup.</p>
     </div>`;
+
   if (!treinos.length) {
     lista.innerHTML = backupHtml + '<div class="vazio">Nenhum treino cadastrado.<br>Toque em <b>+ Novo treino</b>.</div>';
   } else {
@@ -283,8 +329,10 @@ function renderGerenciar() {
         </div>
       </div>`).join('');
   }
+
   lista.querySelectorAll('[data-editar]').forEach(btn => btn.addEventListener('click', () => abrirEditor(btn.dataset.editar)));
   lista.querySelectorAll('[data-excluir]').forEach(btn => btn.addEventListener('click', () => excluirTreino(btn.dataset.excluir)));
+
   const btnExportar = document.getElementById('btnExportar');
   if (btnExportar) btnExportar.addEventListener('click', exportarDados);
   const btnImportar = document.getElementById('btnImportar');
@@ -295,15 +343,9 @@ function renderGerenciar() {
     e.target.value = '';
   });
 }
+
 function exportarDados() {
-  const dados = {
-    app: 'itrainer', versao: 8, exportadoEm: new Date().toISOString(),
-    treinos, estado, historico
-  };
-  // Inclui os dados do módulo Nutrição (se carregado)
-  if (window.Nutricao && window.Nutricao.backupExtrair) {
-    dados.nutricao = window.Nutricao.backupExtrair();
-  }
+  const dados = { app: 'itrainer', versao: 7, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -315,6 +357,7 @@ function exportarDados() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   mostrarToast('✅ Backup exportado');
 }
+
 function importarDados(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -325,10 +368,6 @@ function importarDados(file) {
       estado = (dados.estado && typeof dados.estado === 'object' && !Array.isArray(dados.estado)) ? dados.estado : {};
       historico = Array.isArray(dados.historico) ? dados.historico : [];
       salvarTreinos(); salvarEstado(); salvarHistorico();
-      // Restaura os dados do módulo Nutrição (se presentes no backup)
-      if (window.Nutricao && window.Nutricao.backupAplicar && dados.nutricao) {
-        window.Nutricao.backupAplicar(dados.nutricao);
-      }
       mostrarToast('✅ Dados importados');
       renderGerenciar(); renderTreinos(); renderHistorico();
     } catch (err) {
@@ -337,6 +376,7 @@ function importarDados(file) {
   };
   reader.readAsText(file);
 }
+
 function excluirTreino(id) {
   const t = treinos.find(x => x.id === id);
   if (!t) return;
@@ -349,14 +389,17 @@ function excluirTreino(id) {
   renderGerenciar();
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
+
 /* ---------- 7. EDITOR ---------- */
 const LBL = 'font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 const CAMPO = 'display:flex;flex-direction:column;gap:0.2rem;min-width:0;';
+
 function abrirEditor(treinoId) {
   const modal = document.getElementById('modalEditor');
   const corpo = document.getElementById('editorCorpo');
   let treino;
   let novo = false;
+
   if (treinoId) {
     treino = treinos.find(t => t.id === treinoId);
     if (!treino) return;
@@ -364,6 +407,7 @@ function abrirEditor(treinoId) {
     treino = { id: 't' + Date.now(), nome: '', exercicios: [{ nome: '', icone: 'halteres', equipamento: '', tipo: 'reps', series: 3, repeticoes: '12', descanso: 60, carga: '' }] };
     novo = true;
   }
+
   corpo.innerHTML = `
     <div class="editor-cabecalho">
       <h3>${novo ? 'Novo treino' : 'Editar treino'}</h3>
@@ -379,11 +423,13 @@ function abrirEditor(treinoId) {
       <button class="btn btn-primary" id="edSalvar">Salvar treino</button>
       ${novo ? '' : '<button class="btn btn-danger" id="edExcluir">Excluir treino</button>'}
     </div>`;
+
   const cont = corpo.querySelector('#edExercicios');
+
   const coletar = () => {
     treino.exercicios = Array.from(cont.querySelectorAll('.ed-exercicio')).map(row => ({
       nome: row.querySelector('.ed-nome').value.trim(),
-      icone: row.dataset.icone || 'halteres',
+      icone: row.querySelector('.ed-icone').value || 'halteres',
       equipamento: row.querySelector('.ed-equipamento').value.trim(),
       tipo: row.querySelector('.ed-tipo-select').value || 'reps',
       series: Number(row.querySelector('.ed-series').value) || 3,
@@ -392,19 +438,21 @@ function abrirEditor(treinoId) {
       carga: row.querySelector('.ed-carga').value.trim()
     }));
   };
+
   const renderRows = () => {
     cont.innerHTML = '';
     treino.exercicios.forEach((ex, i) => {
       const tipo = ex.tipo === 'tempo' ? 'tempo' : 'reps';
+      const sel = Object.keys(ICONES)
+        .map(k => `<option value="${k}" ${ex.icone === k ? 'selected' : ''}>${k}</option>`).join('');
       const row = document.createElement('div');
       row.className = 'ed-exercicio';
-      row.dataset.icone = ex.icone;
       row.innerHTML = `
         <input type="text" class="ed-nome" value="${ex.nome}" placeholder="Nome do exercício">
-        <label class="campo">
-          <span>Equipamento/Aparelho</span>
-          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Digite ou escolha">
-        </label>
+        <div class="ed-dupla">
+          <select class="ed-icone">${sel}</select>
+          <input type="text" class="ed-equipamento" value="${ex.equipamento}" placeholder="Equipamento">
+        </div>
         <div class="ed-tipo" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;align-items:end;margin-bottom:0.5rem;">
           <label style="${CAMPO}">
             <span style="${LBL}">Tipo de medição</span>
@@ -434,6 +482,7 @@ function abrirEditor(treinoId) {
           </label>
         </div>
         <button class="btn btn-outline btn-pequeno ed-remover">Remover exercício</button>`;
+
       const selTipo = row.querySelector('.ed-tipo-select');
       const reps = row.querySelector('.ed-reps');
       const rotuloReps = row.querySelector('.ed-rotulo-reps');
@@ -444,26 +493,23 @@ function abrirEditor(treinoId) {
         rotuloTipo.textContent = tempo ? '⏱️ Cronômetro' : '🔁 Repetições';
         reps.placeholder = tempo ? 'Ex.: 45' : 'Ex.: 12';
       });
+
       row.querySelector('.ed-remover').addEventListener('click', () => {
         coletar();
         treino.exercicios.splice(i, 1);
         renderRows();
       });
       cont.appendChild(row);
-      /* ===== INTEGRAÇÃO AUTCOMPLETE DE EQUIPAMENTOS =====
-         Ativa o autocomplete + botão "+" no campo de equipamento
-         de cada linha de exercício recém-criada. */
-      if (window.iniciarAutocompleteEquipamento) {
-        iniciarAutocompleteEquipamento(row.querySelector('.ed-equipamento'));
-      }
     });
   };
   renderRows();
+
   corpo.querySelector('#edAdicionar').addEventListener('click', () => {
     coletar();
     treino.exercicios.push({ nome: '', icone: 'halteres', equipamento: '', tipo: 'reps', series: 3, repeticoes: '12', descanso: 60, carga: '' });
     renderRows();
   });
+
   corpo.querySelector('#edSalvar').addEventListener('click', () => {
     coletar();
     treino.exercicios = treino.exercicios.filter(e => e.nome !== '');
@@ -479,11 +525,14 @@ function abrirEditor(treinoId) {
     renderGerenciar();
     renderTreinos();
   });
+
   const btnExcluir = corpo.querySelector('#edExcluir');
   if (btnExcluir) btnExcluir.addEventListener('click', () => { modal.classList.remove('aberto'); excluirTreino(treino.id); });
+
   corpo.querySelector('#editorFechar').addEventListener('click', () => modal.classList.remove('aberto'));
   modal.classList.add('aberto');
 }
+
 /* ---------- 8. HISTÓRICO + ESTATÍSTICAS ---------- */
 function registrarHistorico(t) {
   if (!t || !t.exercicios.length) return;
@@ -504,22 +553,18 @@ function registrarHistorico(t) {
   });
   salvarHistorico();
 }
-function limparHistorico() {
-  if (!historico.length) { mostrarToast('Histórico já está vazio'); return; }
-  if (!confirm(`Apagar todo o histórico (${historico.length} treino(s))?\nEssa ação não pode ser desfeita.`)) return;
-  historico = [];
-  salvarHistorico();
-  mostrarToast('Histórico limpo');
-  renderHistorico();
-}
+
 function capitalizar(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
 function calcularEstatisticas() {
   const stats = { total: historico.length, ultimos7: 0, mediaSemana: 0, maisFrequente: null, volume: 0, streak: 0 };
   if (!historico.length) return stats;
+
   const hojeMs = new Date(hoje() + 'T00:00:00').getTime();
   const diaMs = 86400000;
   const freq = {};
   let volume = 0;
+
   historico.forEach(h => {
     const t = new Date(h.data + 'T00:00:00').getTime();
     if (hojeMs - t <= 7 * diaMs) stats.ultimos7++;
@@ -529,29 +574,32 @@ function calcularEstatisticas() {
       if (!isNaN(carga) && carga > 0) volume += (e.series || 0) * carga;
     });
   });
+
   const datasUnicas = [...new Set(historico.map(h => h.data))].sort();
   const inicio = datasUnicas.length ? new Date(datasUnicas[0] + 'T00:00:00').getTime() : hojeMs;
   const semanas = Math.max(1, Math.ceil((hojeMs - inicio) / (7 * diaMs)));
   stats.mediaSemana = Math.round((historico.length / semanas) * 10) / 10;
+
   let max = 0;
   Object.keys(freq).forEach(k => { if (freq[k] > max) { max = freq[k]; stats.maisFrequente = k; } });
+
   const set = new Set(historico.map(h => h.data));
   let streak = 0;
   let d = new Date(hojeMs);
   while (set.has(d.toISOString().split('T')[0])) { streak++; d = new Date(d.getTime() - diaMs); }
+
   stats.volume = volume;
   stats.streak = streak;
   return stats;
 }
+
 function renderHistorico() {
   const lista = document.getElementById('listaHistorico');
   const stats = calcularEstatisticas();
+
   const statsHtml = `
     <div class="stats-box" style="margin-bottom:1rem;padding:0.9rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.6rem;">
-        <strong style="font-size:0.85rem;">📊 Suas estatísticas</strong>
-        <button class="btn btn-outline btn-pequeno" id="btnLimparHistorico">Limpar histórico</button>
-      </div>
+      <strong style="display:block;margin-bottom:0.6rem;font-size:0.85rem;">📊 Suas estatísticas</strong>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;">
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.total}</div><div style="font-size:0.68rem;color:var(--muted);">Treinos totais</div></div>
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;"><div style="font-size:1.3rem;font-weight:800;color:var(--accent);">${stats.ultimos7}</div><div style="font-size:0.68rem;color:var(--muted);">Últimos 7 dias</div></div>
@@ -561,58 +609,56 @@ function renderHistorico() {
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;grid-column:1/-1;"><div style="font-size:1rem;font-weight:800;color:var(--text);">${stats.maisFrequente || '—'}</div><div style="font-size:0.68rem;color:var(--muted);">Exercício mais frequente</div></div>
       </div>
     </div>`;
+
   if (!historico.length) {
     lista.innerHTML = statsHtml + '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
-  } else {
-    const grupos = {};
-    historico.forEach(h => {
-      if (!grupos[h.data]) grupos[h.data] = [];
-      grupos[h.data].push(h);
-    });
-    const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-    lista.innerHTML = statsHtml + datas.map(data => {
-      const titulo = capitalizar(
-        new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
-      );
-      return `
-        <div class="hist-dia">
-          <div class="hist-dia-cabecalho">
-            <strong>${titulo}</strong>
-            <span>${grupos[data].length} treino(s)</span>
-          </div>
-          ${grupos[data].map(h => `
-            <div class="hist-item">
-              <div class="hist-item-topo">
-                <strong>${h.treinoNome}</strong>
-                <span>🕐 ${h.hora}</span>
-              </div>
-              <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
-            </div>`).join('')}
-        </div>`;
-    }).join('');
+    return;
   }
-  const btnLimparHistorico = document.getElementById('btnLimparHistorico');
-  if (btnLimparHistorico) btnLimparHistorico.addEventListener('click', limparHistorico);
+
+  const grupos = {};
+  historico.forEach(h => {
+    if (!grupos[h.data]) grupos[h.data] = [];
+    grupos[h.data].push(h);
+  });
+  const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+  lista.innerHTML = statsHtml + datas.map(data => {
+    const titulo = capitalizar(
+      new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+    );
+    return `
+      <div class="hist-dia">
+        <div class="hist-dia-cabecalho">
+          <strong>${titulo}</strong>
+          <span>${grupos[data].length} treino(s)</span>
+        </div>
+        ${grupos[data].map(h => `
+          <div class="hist-item">
+            <div class="hist-item-topo">
+              <strong>${h.treinoNome}</strong>
+              <span>🕐 ${h.hora}</span>
+            </div>
+            <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
 }
-/* ---------- 9. SOM (Web Audio API) ---------- */
+
+/* ---------- 9. SOM (Web Audio API) — corrigido para iPhone/Safari ---------- */
 let audioCtx = null;
+
+/* RF-02: no iOS o contexto de áudio só toca se for criado/resumido dentro de um gesto do usuário.
+   Por isso o desbloqueio é disparado em QUALQUER toque/clique, não só ao marcar série. */
 function desbloquearAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   } catch (e) {}
 }
-// iOS: destrava o áudio no primeiro toque em qualquer lugar da tela
-// (o iPhone só permite som depois de uma interação do usuário)
-document.addEventListener('pointerdown', function destravarAudio() {
-  desbloquearAudio();
-  document.removeEventListener('pointerdown', destravarAudio);
-});
+
 function beep(freq, dur, vol, atraso) {
   if (!audioCtx) return;
-  // Se o iPhone pausou o áudio, retoma antes de tocar o bipe
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const t0 = audioCtx.currentTime + (atraso || 0);
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -628,6 +674,7 @@ function beep(freq, dur, vol, atraso) {
     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
   } catch (e) {}
 }
+
 function tocarSom(tipo) {
   if (!audioCtx) return;
   if (tipo === 'tick') {
@@ -640,9 +687,12 @@ function tocarSom(tipo) {
     beep(660, 0.35, 0.45, 0.45);
   }
 }
-/* ---------- 10. TELA SEMPRE ATIVA (Wake Lock) ---------- */
+
+/* ---------- 10. TELA SEMPRE ATIVA (Wake Lock global) ---------- */
 let wakeLock = null;
 let wakeLockAtivo = false;
+
+/* RF-01: mantém a tela ativa durante TODA a execução do app */
 async function solicitarWakeLock() {
   if (!('wakeLock' in navigator)) return; // iOS Safari não suporta
   try {
@@ -651,13 +701,12 @@ async function solicitarWakeLock() {
     wakeLock.addEventListener('release', () => { wakeLockAtivo = false; });
   } catch (e) { wakeLockAtivo = false; }
 }
-function liberarWakeLock() {
-  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
-  wakeLockAtivo = false;
-}
+
+// Re-solicita ao voltar para a aba (o navegador pode liberar sozinho)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && wakeLockAtivo) solicitarWakeLock();
+  if (document.visibilityState === 'visible') solicitarWakeLock();
 });
+
 /* ---------- 11. TIMER (contagem por tempo real + bipes) ---------- */
 let timerInterval = null;
 let timerRestante = 0;
@@ -667,6 +716,7 @@ let timerEnd = 0;
 let timerFinalTipo = 'descanso';
 let ultimoTick = -1;
 let aoTerminarCallback = null;
+
 function tempoEmSegundos(texto) {
   if (!texto) return 0;
   const t = String(texto).toLowerCase();
@@ -681,11 +731,13 @@ function tempoEmSegundos(texto) {
   }
   return 0;
 }
+
 function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   const modal = document.getElementById('modalTimer');
   const numero = document.getElementById('timerNumero');
   const ring = document.getElementById('timerRing');
   const C = 2 * Math.PI * 52;
+
   timerRestante = segundos;
   timerTotal = segundos;
   timerRodando = true;
@@ -693,54 +745,68 @@ function abrirTimer(segundos, titulo, nomeExercicio, aoTerminar) {
   timerFinalTipo = titulo === 'Tempo de execução' ? 'exec' : 'descanso';
   ultimoTick = -1;
   aoTerminarCallback = (typeof aoTerminar === 'function') ? aoTerminar : null;
+
   document.getElementById('timerTitulo').textContent = titulo;
   document.getElementById('timerExercicio').textContent = nomeExercicio || '';
   document.getElementById('timerPausar').textContent = 'Pausar';
   numero.textContent = timerRestante;
   ring.style.strokeDasharray = C;
   ring.style.strokeDashoffset = 0;
+
   modal.classList.add('aberto');
-  solicitarWakeLock();
+
   clearInterval(timerInterval);
   timerInterval = setInterval(stepTimer, 250);
 }
+
 function fecharTimerModal() {
   clearInterval(timerInterval);
   document.getElementById('modalTimer').classList.remove('aberto');
-  liberarWakeLock();
 }
+
 function stepTimer() {
   if (!timerRodando) return;
   const restante = Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000));
   timerRestante = restante;
+
   document.getElementById('timerNumero').textContent = restante;
   const ring = document.getElementById('timerRing');
   const C = 2 * Math.PI * 52;
   ring.style.strokeDashoffset = C * (1 - restante / timerTotal);
+
   if (restante <= 10 && restante > 0 && restante !== ultimoTick) {
     ultimoTick = restante;
     tocarSom('tick');
   }
+
   if (restante <= 0) {
     clearInterval(timerInterval);
     document.getElementById('modalTimer').classList.remove('aberto');
-    liberarWakeLock();
     tocarSom(timerFinalTipo);
     const cb = aoTerminarCallback;
     aoTerminarCallback = null;
     if (cb) cb();
   }
 }
+
 document.getElementById('timerFechar').addEventListener('click', fecharTimerModal);
+
 document.getElementById('timerPausar').addEventListener('click', () => {
   timerRodando = !timerRodando;
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
+
 /* ---------- 12. INICIALIZAÇÃO ---------- */
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
 document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEditor(null));
+
+/* RF-02: desbloqueia o áudio em qualquer interação (essencial no iPhone) */
+['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev =>
+  document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true })
+);
+
 async function iniciarApp() {
   try {
     await abrirBanco();
@@ -756,6 +822,7 @@ async function iniciarApp() {
     carregarEstado();
     carregarHistorico();
   }
+
   if (!Array.isArray(treinos)) {
     const d = lerTreinosDoLocalStorage();
     treinos = d !== null ? d : JSON.parse(JSON.stringify(CONFIG.treinos));
@@ -764,7 +831,9 @@ async function iniciarApp() {
   if (!estado || typeof estado !== 'object' || Array.isArray(estado)) estado = lerEstadoDoLocalStorage();
   if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
   if (!Array.isArray(historico)) historico = [];
+
+  solicitarWakeLock(); // RF-01: tela ativa durante toda a execução do app
   navegar('treinos');
-  if (window.Nutricao && window.Nutricao.init) window.Nutricao.init();
 }
+
 iniciarApp();
