@@ -1,9 +1,9 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v9: + Botões "Concluir treino" (1º) e "Limpar treino" (2º)
-       + Conclusão válida apenas no dia (reset automático no dia seguinte)
-       + "Limpar treino" NÃO adiciona ao histórico
-       + Tela ativa global + bip corrigido para iPhone/Safari
+   v10: + Integração restaurada com o módulo Nutrição (rota, init, backup)
+        + Autocomplete de equipamento
+        + DB compartilhado com a nutrição (versão 3)
+        + Treinos: Concluir (1º) / Limpar (2º), reset diário, histórico ok
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
@@ -11,7 +11,7 @@ const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
 
 const DB_NOME = 'itrainer-db';
-const DB_VERSAO = 1;
+const DB_VERSAO = 3; /* compartilhado com o módulo Nutrição */
 
 let treinos = null;
 let estado = {};
@@ -30,9 +30,14 @@ function abrirBanco() {
       const req = indexedDB.open(DB_NOME, DB_VERSAO);
       req.onupgradeneeded = (e) => {
         const d = e.target.result;
+        /* stores do módulo treinos */
         if (!d.objectStoreNames.contains('treinos')) d.createObjectStore('treinos');
         if (!d.objectStoreNames.contains('estado')) d.createObjectStore('estado');
         if (!d.objectStoreNames.contains('historico')) d.createObjectStore('historico');
+        /* stores do módulo nutrição (para instalação limpa criar tudo de uma vez) */
+        ['perfil', 'metas', 'alimentos', 'registros', 'agua'].forEach((nome) => {
+          if (!d.objectStoreNames.contains(nome)) d.createObjectStore(nome, { keyPath: 'chave' });
+        });
       };
       req.onsuccess = () => { db = req.result; resolve(db); };
       req.onerror = () => reject(req.error);
@@ -112,7 +117,7 @@ function mostrarToast(msg) {
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
 
-/* ---------- 3. NAVEGAÇÃO ---------- */
+/* ---------- 3. NAVEGAÇÃO (inclui módulo Nutrição) ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewId).classList.add('active');
@@ -121,6 +126,20 @@ function navegar(viewId) {
   if (viewId === 'treinos') renderTreinos();
   if (viewId === 'historico') renderHistorico();
   if (viewId === 'gerenciar') renderGerenciar();
+  if (viewId === 'nutricao') abrirNutricao();
+}
+
+/* Gancho defensivo: funciona com window.Nutricao (main2 antigo) ou com
+   funções globais da nutrição (nutRender/nutGarantirEstado) */
+function abrirNutricao() {
+  try {
+    if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.ver === 'function') {
+      window.Nutricao.ver('diario');
+    } else if (typeof nutGarantirEstado === 'function') {
+      nutGarantirEstado();
+      if (typeof nutRender === 'function') nutRender();
+    }
+  } catch (e) {}
 }
 
 /* ---------- 3.1 RESET DIÁRIO (conclusão vale só no dia) ---------- */
@@ -322,7 +341,7 @@ function concluirTreino() {
   renderTreinos();
 }
 
-/* ---------- 6. GERENCIAR (CRUD + BACKUP) ---------- */
+/* ---------- 6. GERENCIAR (CRUD + BACKUP + Nutrição) ---------- */
 function renderGerenciar() {
   const lista = document.getElementById('listaGerenciar');
 
@@ -334,7 +353,7 @@ function renderGerenciar() {
         <button class="btn btn-outline btn-pequeno" id="btnImportar">Importar</button>
         <input type="file" id="fileImportar" accept="application/json,.json" style="display:none;">
       </div>
-      <p style="margin:0.5rem 0 0;font-size:0.72rem;color:var(--muted);">Exportar baixa um arquivo JSON com treinos, progresso e histórico. Importar restaura de um arquivo de backup.</p>
+      <p style="margin:0.5rem 0 0;font-size:0.72rem;color:var(--muted);">Exportar baixa um arquivo JSON com treinos, progresso, histórico e nutrição. Importar restaura de um arquivo de backup.</p>
     </div>`;
 
   if (!treinos.length) {
@@ -367,8 +386,45 @@ function renderGerenciar() {
   });
 }
 
+/* Se o módulo de nutrição existir, inclui os dados no backup */
+function backupExtrair() {
+  var nut = {};
+  try {
+    if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.exportar === 'function') return window.Nutricao.exportar();
+  } catch (e) {}
+  try {
+    if (typeof nutAlimentos !== 'undefined') nut.alimentos = nutAlimentos;
+    if (typeof nutMetas !== 'undefined') nut.metas = nutMetas;
+    if (typeof nutRegistros !== 'undefined') nut.registros = nutRegistros;
+    if (typeof nutAgua !== 'undefined') nut.agua = nutAgua;
+    if (typeof nutPerfil !== 'undefined') nut.perfil = nutPerfil;
+  } catch (e) {}
+  return nut;
+}
+
+function backupAplicar(dados) {
+  if (!dados || !dados.nutricao) return;
+  try {
+    if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.importar === 'function') {
+      window.Nutricao.importar(dados.nutricao);
+      return;
+    }
+  } catch (e) {}
+  try {
+    if (typeof nutMetas !== 'undefined' && dados.nutricao.metas) Object.assign(nutMetas, dados.nutricao.metas);
+    if (typeof nutRegistros !== 'undefined' && dados.nutricao.registros) nutRegistros = dados.nutricao.registros;
+    if (typeof nutAgua !== 'undefined' && dados.nutricao.agua) nutAgua = dados.nutricao.agua;
+    if (typeof nutAlimentos !== 'undefined' && dados.nutricao.alimentos) Object.assign(nutAlimentos, dados.nutricao.alimentos);
+    if (typeof nutPerfil !== 'undefined' && dados.nutricao.perfil) nutPerfil = dados.nutricao.perfil;
+    if (typeof nutSalvarRegistros === 'function') {
+      nutSalvarRegistros(); nutSalvarMetas(); nutSalvarAlimentos(); nutSalvarAgua();
+    }
+  } catch (e) {}
+}
+
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 9, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 10, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  try { dados.nutricao = backupExtrair(); } catch (e) {}
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -391,8 +447,10 @@ function importarDados(file) {
       estado = (dados.estado && typeof dados.estado === 'object' && !Array.isArray(dados.estado)) ? dados.estado : {};
       historico = Array.isArray(dados.historico) ? dados.historico : [];
       salvarTreinos(); salvarEstado(); salvarHistorico();
+      try { backupAplicar(dados); } catch (err2) {}
       mostrarToast('✅ Dados importados');
       renderGerenciar(); renderTreinos(); renderHistorico();
+      try { if (typeof nutRender === 'function') nutRender(); } catch (err3) {}
     } catch (err) {
       mostrarToast('❌ Arquivo de backup inválido');
     }
@@ -411,6 +469,34 @@ function excluirTreino(id) {
   mostrarToast('Treino excluído');
   renderGerenciar();
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
+}
+
+/* ---------- 6.1 AUTOCOMPLETE DE EQUIPAMENTO ---------- */
+function equipamentosConhecidos() {
+  var nomes = [];
+  treinos.forEach(function (t) {
+    (t.exercicios || []).forEach(function (e) {
+      if (e.equipamento && nomes.indexOf(e.equipamento) === -1) nomes.push(e.equipamento);
+    });
+  });
+  return nomes;
+}
+
+function iniciarAutocompleteEquipamento() {
+  try {
+    var dl = document.getElementById('datalistEquipamentos');
+    if (!dl) {
+      dl = document.createElement('datalist');
+      dl.id = 'datalistEquipamentos';
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = equipamentosConhecidos().map(function (n) {
+      return '<option value="' + String(n).replace(/"/g, '&quot;') + '">';
+    }).join('');
+    document.querySelectorAll('.ed-equipamento').forEach(function (inp) {
+      inp.setAttribute('list', 'datalistEquipamentos');
+    });
+  } catch (e) {}
 }
 
 /* ---------- 7. EDITOR ---------- */
@@ -524,6 +610,7 @@ function abrirEditor(treinoId) {
       });
       cont.appendChild(row);
     });
+    iniciarAutocompleteEquipamento();
   };
   renderRows();
 
@@ -825,6 +912,17 @@ document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEd
   document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true })
 );
 
+/* Init da nutrição: defensivo — funciona com window.Nutricao (main2) ou funções globais */
+function iniciarNutricao() {
+  try {
+    if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.init === 'function') {
+      window.Nutricao.init();
+    } else if (typeof nutGarantirEstado === 'function') {
+      nutGarantirEstado();
+    }
+  } catch (e) {}
+}
+
 async function iniciarApp() {
   try {
     await abrirBanco();
@@ -851,7 +949,13 @@ async function iniciarApp() {
   if (!Array.isArray(historico)) historico = [];
 
   solicitarWakeLock();
+  iniciarNutricao();
   navegar('treinos');
 }
+
+/* Fallback: se os scripts da nutrição carregarem depois do main, inicializa no load */
+window.addEventListener('load', function () {
+  try { if (typeof nutGarantirEstado === 'function') nutGarantirEstado(); } catch (e) {}
+});
 
 iniciarApp();
