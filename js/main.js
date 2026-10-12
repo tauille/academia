@@ -1,22 +1,22 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v11: + Migração de chaves legadas no boot (histórico/treinos/estado)
-        + Integração com o módulo Nutrição (rota, init, backup)
-        + Autocomplete de equipamento
-        + Treinos: Concluir (1º) / Limpar (2º), reset diário, histórico ok
+   v12: + Aviso de nova versão com botão "Atualizar agora"
+        + Botão "Limpar histórico" (Treinos + Nutrição) com confirmação e backup
+        + Migração de chaves legadas no boot
+        + Integração com o módulo Nutrição
+        + Treinos: Concluir (1º) / Limpar (2º), reset diário
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
 
-/* Chaves legadas de versões anteriores (para migração sem perder dados) */
 const CHAVES_TREINOS_LEGADO = ['itrainer-treinos', 'itrainer-treinos-v1', 'itrainer-treinos-v2'];
 const CHAVES_ESTADO_LEGADO = ['itrainer-estado', 'itrainer-estado-v1', 'itrainer-estado-v2'];
 const CHAVES_HISTORICO_LEGADO = ['itrainer-historico', 'itrainer-historico-v1', 'itrainer-historico-v2'];
 
 const DB_NOME = 'itrainer-db';
-const DB_VERSAO = 3; /* compartilhado com o módulo Nutrição */
+const DB_VERSAO = 3;
 
 let treinos = null;
 let estado = {};
@@ -120,7 +120,7 @@ function mostrarToast(msg) {
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
 
-/* ---------- 2.1 MIGRAÇÃO DE CHAVES LEGADAS (mantém histórico nas atualizações) ---------- */
+/* ---------- 2.1 MIGRAÇÃO DE CHAVES LEGADAS ---------- */
 function lerChaveLegada(chave) {
   try {
     const raw = localStorage.getItem(chave);
@@ -130,7 +130,7 @@ function lerChaveLegada(chave) {
 }
 
 function migrarHistoricoLegado() {
-  if (historico.length) return; // já tem dados na chave atual
+  if (historico.length) return;
   let achou = false;
   CHAVES_HISTORICO_LEGADO.forEach(function (chave) {
     if (achou) return;
@@ -176,7 +176,7 @@ function migrarEstadoLegado() {
   if (achou) salvarEstado();
 }
 
-/* ---------- 3. NAVEGAÇÃO (inclui módulo Nutrição) ---------- */
+/* ---------- 3. NAVEGAÇÃO ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewId).classList.add('active');
@@ -199,7 +199,7 @@ function abrirNutricao() {
   } catch (e) {}
 }
 
-/* ---------- 3.1 RESET DIÁRIO (conclusão vale só no dia) ---------- */
+/* ---------- 3.1 RESET DIÁRIO ---------- */
 function resetarTreinosDoDiaAnterior() {
   const hojeStr = hoje();
   let mudou = false;
@@ -368,7 +368,6 @@ function marcarSerie(exIndex, serieIndex) {
   renderExecucao();
 }
 
-/* "Limpar treino": zera as marcações, NÃO adiciona ao histórico, permanece na página */
 function limparTreino() {
   const t = treinoAtivo;
   if (!t) return;
@@ -381,7 +380,6 @@ function limparTreino() {
   renderExecucao();
 }
 
-/* "Concluir treino": encerra, registra a data, adiciona ao histórico e volta à tela principal */
 function concluirTreino() {
   const t = treinoAtivo;
   if (!t || !t.exercicios.length) return;
@@ -479,7 +477,7 @@ function backupAplicar(dados) {
 }
 
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 11, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 12, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   try { dados.nutricao = backupExtrair(); } catch (e) {}
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -527,7 +525,38 @@ function excluirTreino(id) {
   if (treinoAtivo && treinoAtivo.id === id) { treinoAtivo = null; renderTreinos(); }
 }
 
-/* ---------- 6.1 AUTOCOMPLETE DE EQUIPAMENTO ---------- */
+/* ---------- 6.1 LIMPAR HISTÓRICO (Treinos + Nutrição) com confirmação e backup ---------- */
+function limparHistorico() {
+  /* Confirmação com opção de backup */
+  const opcao = confirm(
+    'Tem certeza que deseja apagar TODO o histórico (Treinos e Nutrição)?\n\n' +
+    '• "OK" = fazer backup antes e depois limpar\n' +
+    '• "Cancelar" = não limpar nada'
+  );
+  if (!opcao) return;
+
+  /* Backup antes de limpar (sempre oferecido) */
+  exportarDados();
+
+  /* Limpa histórico de treinos */
+  historico = [];
+  salvarHistorico();
+
+  /* Limpa estado de marcação dos treinos (recomeçar do zero) */
+  estado = {};
+  salvarEstado();
+
+  /* Limpa dados de nutrição (registros e água) */
+  try {
+    if (typeof nutRegistros !== 'undefined') { nutRegistros = {}; if (typeof nutSalvarRegistros === 'function') nutSalvarRegistros(); }
+    if (typeof nutAgua !== 'undefined') { nutAgua = {}; if (typeof nutSalvarAgua === 'function') nutSalvarAgua(); }
+  } catch (e) {}
+
+  mostrarToast('✅ Histórico limpo (backup salvo)');
+  renderHistorico();
+}
+
+/* ---------- 6.2 AUTOCOMPLETE DE EQUIPAMENTO ---------- */
 function equipamentosConhecidos() {
   var nomes = [];
   treinos.forEach(function (t) {
@@ -774,42 +803,45 @@ function renderHistorico() {
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;grid-column:1/-1;"><div style="font-size:1.1rem;font-weight:800;color:var(--accent);">${stats.volume > 0 ? stats.volume + ' kg' : '—'}</div><div style="font-size:0.68rem;color:var(--muted);">Volume total (séries × carga)</div></div>
         <div style="background:var(--surface);border-radius:8px;padding:0.6rem;grid-column:1/-1;"><div style="font-size:1rem;font-weight:800;color:var(--text);">${stats.maisFrequente || '—'}</div><div style="font-size:0.68rem;color:var(--muted);">Exercício mais frequente</div></div>
       </div>
+      <button class="btn btn-danger btn-bloco" id="btnLimparHistorico" style="margin-top:0.8rem;">🗑️ Limpar histórico</button>
     </div>`;
 
   if (!historico.length) {
     lista.innerHTML = statsHtml + '<div class="vazio">Nenhum treino concluído ainda.<br>Complete um treino para registrar aqui.</div>';
-    return;
+  } else {
+    const grupos = {};
+    historico.forEach(h => {
+      if (!grupos[h.data]) grupos[h.data] = [];
+      grupos[h.data].push(h);
+    });
+    const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+    lista.innerHTML = statsHtml + datas.map(data => {
+      const titulo = capitalizar(
+        new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+      );
+      return `
+        <div class="hist-dia">
+          <div class="hist-dia-cabecalho">
+            <strong>${titulo}</strong>
+            <span>${grupos[data].length} treino(s)</span>
+          </div>
+          ${grupos[data].map(h => `
+            <div class="hist-item">
+              <div class="hist-item-topo">
+                <strong>${h.treinoNome}</strong>
+                <span>🕐 ${h.hora}</span>
+              </div>
+              <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
+            </div>`).join('')}
+        </div>`;
+    }).join('');
   }
 
-  const grupos = {};
-  historico.forEach(h => {
-    if (!grupos[h.data]) grupos[h.data] = [];
-    grupos[h.data].push(h);
-  });
-  const datas = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-  lista.innerHTML = statsHtml + datas.map(data => {
-    const titulo = capitalizar(
-      new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
-    );
-    return `
-      <div class="hist-dia">
-        <div class="hist-dia-cabecalho">
-          <strong>${titulo}</strong>
-          <span>${grupos[data].length} treino(s)</span>
-        </div>
-        ${grupos[data].map(h => `
-          <div class="hist-item">
-            <div class="hist-item-topo">
-              <strong>${h.treinoNome}</strong>
-              <span>🕐 ${h.hora}</span>
-            </div>
-            <div class="hist-exercicios">${h.exercicios.map(e => `${e.series}× ${e.nome}${e.carga ? ' · ' + e.carga + 'kg' : ''}`).join('<br>')}</div>
-          </div>`).join('')}
-      </div>`;
-  }).join('');
+  const btnLimparHistorico = document.getElementById('btnLimparHistorico');
+  if (btnLimparHistorico) btnLimparHistorico.addEventListener('click', limparHistorico);
 }
 
-/* ---------- 9. SOM (Web Audio API) — corrigido para iPhone/Safari ---------- */
+/* ---------- 9. SOM (Web Audio API) ---------- */
 let audioCtx = null;
 
 function desbloquearAudio() {
@@ -869,7 +901,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') solicitarWakeLock();
 });
 
-/* ---------- 11. TIMER (contagem por tempo real + bipes) ---------- */
+/* ---------- 11. TIMER ---------- */
 let timerInterval = null;
 let timerRestante = 0;
 let timerTotal = 1;
@@ -958,7 +990,47 @@ document.getElementById('timerPausar').addEventListener('click', () => {
   document.getElementById('timerPausar').textContent = timerRodando ? 'Pausar' : 'Continuar';
 });
 
-/* ---------- 12. INICIALIZAÇÃO ---------- */
+/* ---------- 12. AVISO DE NOVA VERSÃO ---------- */
+function mostrarAvisoAtualizacao() {
+  if (document.getElementById('avisoAtualizacao')) return;
+  const aviso = document.createElement('div');
+  aviso.id = 'avisoAtualizacao';
+  aviso.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--surface-2,#111);border-top:2px solid var(--accent,#c8f31d);padding:0.9rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:0.8rem;box-shadow:0 -4px 16px rgba(0,0,0,.4);';
+  aviso.innerHTML = '<div style="font-size:0.85rem;color:var(--text,#fff);">✨ <strong>Nova versão disponível!</strong><br><span style="font-size:0.75rem;color:var(--muted,#aaa);">Toque em atualizar para usar as novidades.</span></div>' +
+    '<button id="btnAtualizarAgora" style="background:var(--accent,#c8f31d);color:#000;border:none;border-radius:8px;padding:0.6rem 1rem;font-weight:800;font-size:0.85rem;white-space:nowrap;">Atualizar agora</button>';
+  document.body.appendChild(aviso);
+  document.getElementById('btnAtualizarAgora').addEventListener('click', () => {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ action: 'skipWaiting' });
+      }
+    } catch (e) {}
+    window.location.reload();
+  });
+}
+
+function configurarAvisoAtualizacao() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then((reg) => {
+    reg.addEventListener('updatefound', () => {
+      const novo = reg.installing;
+      if (!novo) return;
+      novo.addEventListener('statechange', () => {
+        if (novo.state === 'installed' && navigator.serviceWorker.controller) {
+          mostrarAvisoAtualizacao();
+        }
+      });
+    });
+  });
+  let recarregando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (recarregando) return;
+    recarregando = true;
+    window.location.reload();
+  });
+}
+
+/* ---------- 13. INICIALIZAÇÃO ---------- */
 document.querySelectorAll('[data-view]').forEach(el => {
   el.addEventListener('click', () => navegar(el.dataset.view));
 });
@@ -1003,14 +1075,13 @@ async function iniciarApp() {
   if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
   if (!Array.isArray(historico)) historico = [];
 
-  /* Migração de chaves legadas — garante que histórico/treinos/estado
-     antigos sejam recuperados antes de qualquer renderização */
   migrarTreinosLegado();
   migrarEstadoLegado();
   migrarHistoricoLegado();
 
   solicitarWakeLock();
   iniciarNutricao();
+  configurarAvisoAtualizacao();
   navegar('treinos');
 }
 
