@@ -1,14 +1,19 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v10: + Integração restaurada com o módulo Nutrição (rota, init, backup)
+   v11: + Migração de chaves legadas no boot (histórico/treinos/estado)
+        + Integração com o módulo Nutrição (rota, init, backup)
         + Autocomplete de equipamento
-        + DB compartilhado com a nutrição (versão 3)
         + Treinos: Concluir (1º) / Limpar (2º), reset diário, histórico ok
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
 const STORAGE_ESTADO = 'itrainer-estado-v3';
 const STORAGE_HISTORICO = 'itrainer-historico-v3';
+
+/* Chaves legadas de versões anteriores (para migração sem perder dados) */
+const CHAVES_TREINOS_LEGADO = ['itrainer-treinos', 'itrainer-treinos-v1', 'itrainer-treinos-v2'];
+const CHAVES_ESTADO_LEGADO = ['itrainer-estado', 'itrainer-estado-v1', 'itrainer-estado-v2'];
+const CHAVES_HISTORICO_LEGADO = ['itrainer-historico', 'itrainer-historico-v1', 'itrainer-historico-v2'];
 
 const DB_NOME = 'itrainer-db';
 const DB_VERSAO = 3; /* compartilhado com o módulo Nutrição */
@@ -30,11 +35,9 @@ function abrirBanco() {
       const req = indexedDB.open(DB_NOME, DB_VERSAO);
       req.onupgradeneeded = (e) => {
         const d = e.target.result;
-        /* stores do módulo treinos */
         if (!d.objectStoreNames.contains('treinos')) d.createObjectStore('treinos');
         if (!d.objectStoreNames.contains('estado')) d.createObjectStore('estado');
         if (!d.objectStoreNames.contains('historico')) d.createObjectStore('historico');
-        /* stores do módulo nutrição (para instalação limpa criar tudo de uma vez) */
         ['perfil', 'metas', 'alimentos', 'registros', 'agua'].forEach((nome) => {
           if (!d.objectStoreNames.contains(nome)) d.createObjectStore(nome, { keyPath: 'chave' });
         });
@@ -117,6 +120,62 @@ function mostrarToast(msg) {
   t._timer = setTimeout(() => t.classList.remove('mostrar'), 2200);
 }
 
+/* ---------- 2.1 MIGRAÇÃO DE CHAVES LEGADAS (mantém histórico nas atualizações) ---------- */
+function lerChaveLegada(chave) {
+  try {
+    const raw = localStorage.getItem(chave);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) { return null; }
+}
+
+function migrarHistoricoLegado() {
+  if (historico.length) return; // já tem dados na chave atual
+  let achou = false;
+  CHAVES_HISTORICO_LEGADO.forEach(function (chave) {
+    if (achou) return;
+    const d = lerChaveLegada(chave);
+    if (!Array.isArray(d)) return;
+    d.forEach(function (h) {
+      if (!historico.some(function (x) { return x.treinoId === h.treinoId && x.data === h.data; })) {
+        historico.push(h);
+      }
+    });
+    if (historico.length) achou = true;
+  });
+  if (achou) {
+    historico.sort(function (a, b) { return String(b.data).localeCompare(String(a.data)); });
+    salvarHistorico();
+  }
+}
+
+function migrarTreinosLegado() {
+  if (treinos && treinos.length) return;
+  let achou = false;
+  CHAVES_TREINOS_LEGADO.forEach(function (chave) {
+    if (achou) return;
+    const d = lerChaveLegada(chave);
+    if (!Array.isArray(d) || !d.length) return;
+    if (!d.every(function (t) { return t && t.id && Array.isArray(t.exercicios); })) return;
+    treinos = d;
+    achou = true;
+  });
+  if (achou) salvarTreinos();
+}
+
+function migrarEstadoLegado() {
+  if (estado && Object.keys(estado).length) return;
+  let achou = false;
+  CHAVES_ESTADO_LEGADO.forEach(function (chave) {
+    if (achou) return;
+    const d = lerChaveLegada(chave);
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return;
+    estado = d;
+    achou = true;
+  });
+  if (achou) salvarEstado();
+}
+
 /* ---------- 3. NAVEGAÇÃO (inclui módulo Nutrição) ---------- */
 function navegar(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -129,8 +188,6 @@ function navegar(viewId) {
   if (viewId === 'nutricao') abrirNutricao();
 }
 
-/* Gancho defensivo: funciona com window.Nutricao (main2 antigo) ou com
-   funções globais da nutrição (nutRender/nutGarantirEstado) */
 function abrirNutricao() {
   try {
     if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.ver === 'function') {
@@ -386,7 +443,6 @@ function renderGerenciar() {
   });
 }
 
-/* Se o módulo de nutrição existir, inclui os dados no backup */
 function backupExtrair() {
   var nut = {};
   try {
@@ -423,7 +479,7 @@ function backupAplicar(dados) {
 }
 
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 10, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 11, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   try { dados.nutricao = backupExtrair(); } catch (e) {}
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -912,7 +968,6 @@ document.getElementById('btnNovoTreino').addEventListener('click', () => abrirEd
   document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true })
 );
 
-/* Init da nutrição: defensivo — funciona com window.Nutricao (main2) ou funções globais */
 function iniciarNutricao() {
   try {
     if (typeof window.Nutricao !== 'undefined' && typeof window.Nutricao.init === 'function') {
@@ -948,12 +1003,17 @@ async function iniciarApp() {
   if (!Array.isArray(historico)) historico = lerHistoricoDoLocalStorage();
   if (!Array.isArray(historico)) historico = [];
 
+  /* Migração de chaves legadas — garante que histórico/treinos/estado
+     antigos sejam recuperados antes de qualquer renderização */
+  migrarTreinosLegado();
+  migrarEstadoLegado();
+  migrarHistoricoLegado();
+
   solicitarWakeLock();
   iniciarNutricao();
   navegar('treinos');
 }
 
-/* Fallback: se os scripts da nutrição carregarem depois do main, inicializa no load */
 window.addEventListener('load', function () {
   try { if (typeof nutGarantirEstado === 'function') nutGarantirEstado(); } catch (e) {}
 });
