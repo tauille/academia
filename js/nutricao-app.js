@@ -99,10 +99,33 @@ function nutCliqueView(ev) {
     case 'agua-menos': nutMudarAgua(-200); break;
     case 'agua-ok': nutSetarAgua(); break;
     case 'hist-aba': nutHistAba = aba; nutRender(); break;
+    case 'limpar-historico': nutLimparHistorico(); break;
     case 'novo-alimento': nutModalAlimento(null); break;
     case 'editar-alimento': nutModalAlimento(id); break;
     case 'excluir-alimento': nutExcluirAlimento(id); break;
   }
+}
+/* ---------- Limpar histórico (com confirmação e backup antes) ---------- */
+function nutLimparHistorico() {
+  /* Reaproveita o fluxo do módulo principal (confirm + backup + limpa Treinos e Nutrição) */
+  if (typeof limparHistorico === 'function') {
+    limparHistorico();
+    nutRender();
+    return;
+  }
+  /* Fallback: limpa apenas a nutrição, com confirmação e backup antes */
+  var ok = confirm(
+    'Apagar TODO o histórico de nutrição (registros de alimentos e água)?\n\n' +
+    'Confirme para fazer backup antes e depois limpar.'
+  );
+  if (!ok) return;
+  try { if (typeof exportarDados === 'function') exportarDados(); } catch (e) {}
+  nutRegistros = {};
+  nutAgua = {};
+  nutSalvarRegistros();
+  nutSalvarAgua();
+  nutToast('Histórico de nutrição limpo.');
+  nutRender();
 }
 /* ---------- Backup ---------- */
 function nutBackupExtrair() {

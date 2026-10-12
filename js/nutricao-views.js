@@ -208,6 +208,7 @@ function nutHtmlHistorico() {
         chip('diario', 'Diário') + chip('semana', 'Semana') + chip('mes', 'Mês') +
       '</div>' +
       nutTabelaHistorico(linhas, rodape) +
+      '<button data-nut="limpar-historico" style="width:100%;background:transparent;border:1px solid #3a2b28;color:#ff5c5c;border-radius:12px;padding:12px;font:700 13px Inter,sans-serif;cursor:pointer;margin-top:12px">🗑️ Limpar histórico</button>' +
     '</div>'
   );
 }
