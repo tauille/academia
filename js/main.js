@@ -1,6 +1,7 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v13: + Autocomplete de equipamento integrado ao catálogo (equipamentos.js)
+   v14: + CORREÇÃO: hoje() usa data local (reset diário funciona corretamente)
+        + Autocomplete de equipamento integrado ao catálogo (equipamentos.js)
         + Aviso de nova versão com botão "Atualizar agora"
         + Botão "Limpar histórico" (Treinos + Nutrição) com confirmação e backup
         + Migração de chaves legadas no boot
@@ -25,7 +26,14 @@ let historico = [];
 let db = null;
 
 function iconeSvg(nome) { return ICONES[nome] || ICONES.halteres; }
-function hoje() { return new Date().toISOString().split('T')[0]; }
+
+/* CORREÇÃO v14: data LOCAL (antes usava UTC — o reset diário não disparava
+   no Brasil depois das 15h, deixando o treino de ontem como "concluído") */
+function hoje() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
 
 /* ---------- 1. BANCO DE DADOS (IndexedDB) ---------- */
 function abrirBanco() {
@@ -477,7 +485,7 @@ function backupAplicar(dados) {
 }
 
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 13, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 14, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   try { dados.nutricao = backupExtrair(); } catch (e) {}
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -557,9 +565,6 @@ function equipamentosConhecidos() {
   return nomes;
 }
 
-/* Prioriza o catálogo do equipamentos.js (window.buscarEquipamentos).
-   Aceita retorno como: array de nomes, array de objetos {nome},
-   ou objeto {resultados: [...]}. Se não existir, usa só os usados nos treinos. */
 function sugestoesEquipamentos() {
   var nomes = equipamentosConhecidos();
   try {
