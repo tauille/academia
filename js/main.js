@@ -1,10 +1,10 @@
 /* ==========================================================================
    itrainer — Lógica do app (CRUD + execução + timer + histórico)
-   v12: + Aviso de nova versão com botão "Atualizar agora"
+   v13: + Autocomplete de equipamento integrado ao catálogo (equipamentos.js)
+        + Aviso de nova versão com botão "Atualizar agora"
         + Botão "Limpar histórico" (Treinos + Nutrição) com confirmação e backup
         + Migração de chaves legadas no boot
         + Integração com o módulo Nutrição
-        + Treinos: Concluir (1º) / Limpar (2º), reset diário
    ========================================================================== */
 
 const STORAGE_TREINOS = 'itrainer-treinos-v3';
@@ -477,7 +477,7 @@ function backupAplicar(dados) {
 }
 
 function exportarDados() {
-  const dados = { app: 'itrainer', versao: 12, exportadoEm: new Date().toISOString(), treinos, estado, historico };
+  const dados = { app: 'itrainer', versao: 13, exportadoEm: new Date().toISOString(), treinos, estado, historico };
   try { dados.nutricao = backupExtrair(); } catch (e) {}
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -527,36 +527,26 @@ function excluirTreino(id) {
 
 /* ---------- 6.1 LIMPAR HISTÓRICO (Treinos + Nutrição) com confirmação e backup ---------- */
 function limparHistorico() {
-  /* Confirmação com opção de backup */
   const opcao = confirm(
     'Tem certeza que deseja apagar TODO o histórico (Treinos e Nutrição)?\n\n' +
     '• "OK" = fazer backup antes e depois limpar\n' +
     '• "Cancelar" = não limpar nada'
   );
   if (!opcao) return;
-
-  /* Backup antes de limpar (sempre oferecido) */
   exportarDados();
-
-  /* Limpa histórico de treinos */
   historico = [];
   salvarHistorico();
-
-  /* Limpa estado de marcação dos treinos (recomeçar do zero) */
   estado = {};
   salvarEstado();
-
-  /* Limpa dados de nutrição (registros e água) */
   try {
     if (typeof nutRegistros !== 'undefined') { nutRegistros = {}; if (typeof nutSalvarRegistros === 'function') nutSalvarRegistros(); }
     if (typeof nutAgua !== 'undefined') { nutAgua = {}; if (typeof nutSalvarAgua === 'function') nutSalvarAgua(); }
   } catch (e) {}
-
   mostrarToast('✅ Histórico limpo (backup salvo)');
   renderHistorico();
 }
 
-/* ---------- 6.2 AUTOCOMPLETE DE EQUIPAMENTO ---------- */
+/* ---------- 6.2 AUTOCOMPLETE DE EQUIPAMENTO (catálogo + usados) ---------- */
 function equipamentosConhecidos() {
   var nomes = [];
   treinos.forEach(function (t) {
@@ -567,6 +557,27 @@ function equipamentosConhecidos() {
   return nomes;
 }
 
+/* Prioriza o catálogo do equipamentos.js (window.buscarEquipamentos).
+   Aceita retorno como: array de nomes, array de objetos {nome},
+   ou objeto {resultados: [...]}. Se não existir, usa só os usados nos treinos. */
+function sugestoesEquipamentos() {
+  var nomes = equipamentosConhecidos();
+  try {
+    if (typeof window.buscarEquipamentos === 'function') {
+      var res = window.buscarEquipamentos('');
+      var lista = [];
+      if (Array.isArray(res)) lista = res;
+      else if (res && Array.isArray(res.resultados)) lista = res.resultados;
+      else if (res && Array.isArray(res.equipamentos)) lista = res.equipamentos;
+      lista.forEach(function (item) {
+        var nome = (typeof item === 'string') ? item : (item && (item.nome || item.equipamento));
+        if (nome && nomes.indexOf(nome) === -1) nomes.push(nome);
+      });
+    }
+  } catch (e) {}
+  return nomes.sort(function (a, b) { return a.localeCompare(b); });
+}
+
 function iniciarAutocompleteEquipamento() {
   try {
     var dl = document.getElementById('datalistEquipamentos');
@@ -575,7 +586,7 @@ function iniciarAutocompleteEquipamento() {
       dl.id = 'datalistEquipamentos';
       document.body.appendChild(dl);
     }
-    dl.innerHTML = equipamentosConhecidos().map(function (n) {
+    dl.innerHTML = sugestoesEquipamentos().map(function (n) {
       return '<option value="' + String(n).replace(/"/g, '&quot;') + '">';
     }).join('');
     document.querySelectorAll('.ed-equipamento').forEach(function (inp) {

@@ -1,7 +1,13 @@
 /* ============================================================
    iTrainer — Nutrição · Lógica, clique e inicialização
+   v2-completo:
+     + Limpar histórico com confirmação e backup antes
+     + Aliases exportar/importar (backup completo via main.js)
+     + Persistência do perfil (nutSalvarPerfil)
+     + Autocomplete/busca e fluxo completo das ações
    ============================================================ */
 'use strict';
+
 /* ---------- Renderização ---------- */
 function nutRender() {
   var view = document.getElementById(NUT_VIEW_ID);
@@ -10,11 +16,13 @@ function nutRender() {
   else if (nutView === 'historico') view.innerHTML = nutHtmlHistorico();
   else if (nutView === 'alimentos') view.innerHTML = nutHtmlAlimentos();
 }
+
 function ver(nome) {
   nutView = ['diario', 'historico', 'alimentos'].indexOf(nome) !== -1 ? nome : 'diario';
   nutGarantirEstado().then(nutRender);
 }
-/* ---------- Ações ---------- */
+
+/* ---------- Ações: alimentos nas refeições ---------- */
 function nutAdicionarAlimento(refeicao, id) {
   var caixa = document.getElementById('nut-qtd-' + id);
   var qtd = nutNum(caixa ? caixa.value : '1', LIMITES.qtd.min, LIMITES.qtd.max);
@@ -23,7 +31,9 @@ function nutAdicionarAlimento(refeicao, id) {
   if (!nutRegistros[hoje]) nutRegistros[hoje] = nutRefeicoesVazias();
   var lista = nutRegistros[hoje][refeicao];
   var existente = null;
-  for (var i = 0; i < lista.length; i++) { if (lista[i].id === id) { existente = lista[i]; break; } }
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].id === id) { existente = lista[i]; break; }
+  }
   if (existente) existente.qtd = Math.round((existente.qtd + qtd) * 100) / 100;
   else lista.push({ id: id, qtd: qtd });
   nutSalvarRegistros();
@@ -33,11 +43,14 @@ function nutAdicionarAlimento(refeicao, id) {
   REFEICOES.forEach(function (r) { if (r.chave === refeicao) rotulo = r.rotulo; });
   nutToast('Adicionado ao ' + rotulo + '.');
 }
+
 function nutMudarQtd(refeicao, id, delta) {
   var hoje = nutHoje();
   var lista = (nutRegistros[hoje] || {})[refeicao] || [];
   var item = null;
-  for (var i = 0; i < lista.length; i++) { if (lista[i].id === id) { item = lista[i]; break; } }
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].id === id) { item = lista[i]; break; }
+  }
   if (!item) return;
   item.qtd = Math.round((item.qtd + delta) * 100) / 100;
   if (item.qtd <= 0) {
@@ -47,6 +60,7 @@ function nutMudarQtd(refeicao, id, delta) {
   nutSalvarRegistros();
   nutRender();
 }
+
 function nutRemoverItem(refeicao, id) {
   var hoje = nutHoje();
   if (!nutRegistros[hoje] || !nutRegistros[hoje][refeicao]) return;
@@ -54,12 +68,15 @@ function nutRemoverItem(refeicao, id) {
   nutSalvarRegistros();
   nutRender();
 }
+
+/* ---------- Ações: água ---------- */
 function nutMudarAgua(delta) {
   var hoje = nutHoje();
   nutAgua[hoje] = nutClamp((nutAgua[hoje] || 0) + delta, LIMITES.agua.min, LIMITES.agua.max);
   nutSalvarAgua();
   nutRender();
 }
+
 function nutSetarAgua() {
   var input = document.getElementById('nut-agua-input');
   if (!input) return;
@@ -69,6 +86,8 @@ function nutSetarAgua() {
   nutSalvarAgua();
   nutRender();
 }
+
+/* ---------- Ações: alimentos cadastrados ---------- */
 function nutExcluirAlimento(id) {
   if (!nutAlimentos[id]) return;
   delete nutAlimentos[id];
@@ -76,6 +95,7 @@ function nutExcluirAlimento(id) {
   nutToast('Alimento excluído.');
   nutRender();
 }
+
 /* ---------- Clique (delegação) ---------- */
 function nutCliqueView(ev) {
   var alvo = ev.target && ev.target.closest ? ev.target.closest('[data-nut]') : null;
@@ -105,6 +125,7 @@ function nutCliqueView(ev) {
     case 'excluir-alimento': nutExcluirAlimento(id); break;
   }
 }
+
 /* ---------- Limpar histórico (com confirmação e backup antes) ---------- */
 function nutLimparHistorico() {
   /* Reaproveita o fluxo do módulo principal (confirm + backup + limpa Treinos e Nutrição) */
@@ -127,7 +148,11 @@ function nutLimparHistorico() {
   nutToast('Histórico de nutrição limpo.');
   nutRender();
 }
-/* ---------- Backup ---------- */
+
+/* ---------- Persistência do perfil ---------- */
+async function nutSalvarPerfil() { await nutDbPut('perfil', nutPerfil); }
+
+/* ---------- Backup completo ---------- */
 function nutBackupExtrair() {
   return {
     versao: 1,
@@ -136,9 +161,10 @@ function nutBackupExtrair() {
     metas: nutMetas,
     registros: nutRegistros,
     agua: nutAgua,
-    perfil: nutPerfil,
+    perfil: nutPerfil
   };
 }
+
 function nutBackupAplicar(dados) {
   if (!dados || typeof dados !== 'object') throw new Error('backup-invalido');
   if (dados.metas && typeof dados.metas === 'object') {
@@ -153,12 +179,22 @@ function nutBackupAplicar(dados) {
     });
     nutSalvarAlimentos();
   }
-  if (dados.registros && typeof dados.registros === 'object') { nutRegistros = dados.registros; nutSalvarRegistros(); }
-  if (dados.agua && typeof dados.agua === 'object') { nutAgua = dados.agua; nutSalvarAgua(); }
-  if (dados.perfil && typeof dados.perfil === 'object') { nutPerfil = dados.perfil; }
+  if (dados.registros && typeof dados.registros === 'object') {
+    nutRegistros = dados.registros;
+    nutSalvarRegistros();
+  }
+  if (dados.agua && typeof dados.agua === 'object') {
+    nutAgua = dados.agua;
+    nutSalvarAgua();
+  }
+  if (dados.perfil && typeof dados.perfil === 'object') {
+    nutPerfil = dados.perfil;
+    nutSalvarPerfil();
+  }
   nutPronto = true;
   nutRender();
 }
+
 /* ---------- Inicialização ---------- */
 function nutInit() {
   var view = document.getElementById(NUT_VIEW_ID);
@@ -166,10 +202,13 @@ function nutInit() {
   view.addEventListener('click', nutCliqueView);
   nutGarantirEstado().then(nutRender);
 }
-/* ---------- Exportação (main.js usa este objeto) ---------- */
+
+/* ---------- Exportação (o main.js usa estes nomes) ---------- */
 window.Nutricao = {
   init: nutInit,
   ver: ver,
+  exportar: nutBackupExtrair,   /* main.js chama este */
+  importar: nutBackupAplicar,   /* main.js chama este */
   backupExtrair: nutBackupExtrair,
-  backupAplicar: nutBackupAplicar,
+  backupAplicar: nutBackupAplicar
 };

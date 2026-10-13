@@ -5,8 +5,8 @@
        + Suporte ao aviso de "nova versão" (skipWaiting via mensagem)
    ========================================================================== */
 
-const CACHE = 'itrainer-v12';
-const CACHE_ASSETS = 'itrainer-assets-v12';
+const CACHE = 'itrainer-v13';
+const CACHE_ASSETS = 'itrainer-assets-v13';
 
 const ARQUIVOS = [
   './',
